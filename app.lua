@@ -10,6 +10,10 @@ typedef struct NSEdgeInsets {
     CGFloat bottom;
     CGFloat right;
 } NSEdgeInsets;
+typedef struct NSRange {
+    NSUInteger location;
+    NSUInteger length;
+} NSRange;
 ]])
 
 -- AppKit constants
@@ -40,6 +44,15 @@ local function NSStr(str)
     return objc.NSString:stringWithUTF8String(str)
 end
 
+local scrollView = nil -- forward declaration
+
+local function appendString(str)
+    local textView = scrollView.documentView
+    local contents = textView.string
+    textView.string = contents:stringByAppendingString(NSStr("\n" .. str))
+    textView:scrollToEndOfDocument(textView)
+end
+
 objc.loadFramework("AppKit")
 
 local pool = objc.NSAutoreleasePool:alloc():init()
@@ -54,10 +67,13 @@ objc.addMethod(AppDelegateClass, "applicationShouldTerminateAfterLastWindowClose
         return YES
     end)
 
+local i = 1
 objc.addMethod(AppDelegateClass, button_action_selector, "v@:@",
     function(self, cmd, sender)
         local title = ffi.string(sender.title:UTF8String())
         print(title .. " clicked")
+        appendString("line " .. tostring(i))
+        i = i + 1
     end)
 
 local appDelegate = objc.AppDelegate:alloc():init()
@@ -101,14 +117,15 @@ hStack:autorelease()
 hStack:addView_inGravity(textField, NSStackViewGravityLeading)
 hStack:addView_inGravity(button, NSStackViewGravityTrailing)
 
-local textView = objc.NSTextView:alloc():init()
-textView:autorelease()
+scrollView = objc.NSTextView:scrollableTextView()
+scrollView.documentView.editable = NO
+scrollView:autorelease()
 
 local vStack = objc.NSStackView:alloc():init()
 vStack:autorelease()
 vStack.orientation = NSUserInterfaceLayoutOrientationVertical
 vStack.edgeInsets = ffi.new("NSEdgeInsets", { top = 10, left = 10, bottom = 10, right = 10 })
-vStack:addView_inGravity(textView, NSStackViewGravityTop)
+vStack:addView_inGravity(scrollView, NSStackViewGravityTop)
 vStack:addView_inGravity(hStack, NSStackViewGravityBottom)
 
 window.contentView = vStack
