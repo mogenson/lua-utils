@@ -27,14 +27,20 @@ function http_get(url)
     return table.concat(response), ret
 end
 
-url = "https://api-v3.mbta.com/predictions?page[limit]=1&filter[route]=%d&filter[stop]=%d"
+url = "https://api-v3.mbta.com/predictions?page[limit]=1&filter[route]=%s&filter[stop]=%d"
 pattern = '"departure_time":"%d%d%d%d%-%d%d%-%d%dT(%d%d:%d%d):%d%d%-%d%d:%d%d"'
-for name, stop in pairs({ Teele = 2576, Davis = 5104 }) do
-    print(name .. " Square")
+for _, stop in ipairs({ { name = "Teele", id = 2576 }, { name = "Davis", id = 5104 } }) do
+    print(stop.name .. " Square")
     for _, route in ipairs({ 87, 88 }) do
-        json, err = http_get(string.format(url, route, stop))
+        json, err = http_get(string.format(url, route, stop.id))
         start, finish, departure_time = json:find(pattern)
         --print(json, start, finish)
         print(route, departure_time)
     end
 end
+
+route = "Red"
+stop = 70063
+json, err = http_get(string.format(url, route, stop))
+start, finish, departure_time = json:find(pattern)
+print(route, departure_time)
