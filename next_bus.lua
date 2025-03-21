@@ -44,3 +44,8 @@ stop = 70063
 json, err = http_get(string.format(url, route, stop))
 start, finish, departure_time = json:find(pattern)
 print(route, departure_time)
+
+print("Kendall Square")
+json, err = http_get(string.format(url, route, 70072))
+start, finish, departure_time = json:find(pattern)
+print(route, departure_time)
