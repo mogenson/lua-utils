@@ -1,7 +1,6 @@
 local objc = require("objc")
 local ffi = require("ffi")
 local bit = require("bit")
-local dbg = require("debugger")
 
 -- Foundation types
 ffi.cdef([[
@@ -80,21 +79,6 @@ objc.addMethod(AppDelegateClass, button_action_selector, "v@:@",
 local appDelegate = objc.AppDelegate:alloc():init()
 appDelegate:autorelease()
 NSApp:setDelegate(appDelegate)
-
--------------------------------------
-ffi.cdef([[
-typedef struct Protocol      Protocol;
-Protocol ** objc_copyProtocolList(unsigned int *outCount);
-const char * protocol_getName(Protocol *proto);
-]])
-local outCount = ffi.new("unsigned int[1]")
-local protocols = ffi.C.objc_copyProtocolList(outCount)
-print(outCount[0])
-for i = 0, outCount[0] - 1 do
-    print(ffi.string(ffi.C.protocol_getName(protocols[i])))
-end
-ffi.C.free(protocols)
-------------------------------------
 
 local menubar = objc.NSMenu:alloc():init()
 menubar:autorelease()

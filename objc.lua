@@ -1,5 +1,3 @@
-#!/usr/bin/env luajit
-
 local ffi = require("ffi")
 local C = ffi.C
 
@@ -187,7 +185,7 @@ local function msgSend(self, selector, ...)
     table.insert(signature, ")")
     local signature = table.concat(signature)
 
-    print(self, selector, signature)
+    -- print(self, selector, signature)
     return ffi.cast(signature, C.objc_msgSend)(unpack(call_args))
 end
 
