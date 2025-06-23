@@ -16,7 +16,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Lint Code Base
-        uses: mrcjkb/lua-typecheck-action@v0.2.0
+        uses: mrcjkb/lua-typecheck-action@v1
         with:
           configpath: ".luarc.json"
           directories: "."
