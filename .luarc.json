@@ -4,5 +4,5 @@
     "globals": [],
     "neededFileStatus": { "codestyle-check": "Any" },
   },
-  "runtime.version": "Lua 5.1",
+  "runtime.version": "LuaJIT",
 }
