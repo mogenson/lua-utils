@@ -43,7 +43,7 @@ void objc_msgSend(void);
 void objc_registerClassPair(Class cls);
 ]])
 
-ffi.load("/usr/lib/libobjc.A.dylib", true)
+assert(ffi.load("/usr/lib/libobjc.A.dylib", true))
 
 local type_encoding = setmetatable({
     ["c"] = "char",
@@ -113,7 +113,7 @@ local function sel(name, num_args)
     if num_args and num_args > 0 and name:sub(-1) ~= "_" then
         name = name .. "_"
     end
-    local name, count = name:gsub("_", ":")
+    local name, count = name:gsub("_", ":") ---@diagnostic disable-line: redefined-local
     if num_args then assert(count == num_args) end
     return C.sel_registerName(name) -- pointer is never NULL
 end
@@ -128,7 +128,7 @@ local function msgSend(self, selector, ...)
     ---@param self Class | id
     ---@param selector SEL
     ---@return Method?
-    local function getMethod(self, selector)
+    local function getMethod(self, selector) ---@diagnostic disable-line: redefined-local
         -- return method for Class or object and SEL
         if ffi.istype("Class", self) then
             return assert(ptr(C.class_getClassMethod(self, selector)))
@@ -160,7 +160,7 @@ local function msgSend(self, selector, ...)
     end
 
     if type(self) == "string" then self = cls(self) end
-    local selector = sel(selector)
+    local selector = sel(selector) ---@diagnostic disable-line: redefined-local
     local method = getMethod(self, selector)
     local call_args = { self, selector, ... }
     local char_ptr = assert(ptr(C.method_copyReturnType(method)))
@@ -183,7 +183,7 @@ local function msgSend(self, selector, ...)
         if i < num_method_args then table.insert(signature, ",") end
     end
     table.insert(signature, ")")
-    local signature = table.concat(signature)
+    local signature = table.concat(signature) ---@diagnostic disable-line: redefined-local
 
     -- print(self, selector, signature)
     return ffi.cast(signature, C.objc_msgSend)(unpack(call_args))
@@ -193,12 +193,12 @@ end
 ---@param framework string
 local function loadFramework(framework)
     -- on newer versions of MacOS this is a broken symbolic link, but dlopen() still succeeds
-    ffi.load(string.format("/System/Library/Frameworks/%s.framework/%s", framework, framework), true)
+    assert(ffi.load(string.format("/System/Library/Frameworks/%s.framework/%s", framework, framework), true))
 end
 
 local function newClass(name, super_class)
     assert(name and type(name) == "string")
-    local super_class = cls(super_class or "NSObject")
+    local super_class = cls(super_class or "NSObject") ---@diagnostic disable-line: redefined-local
     local class = assert(ptr(C.objc_allocateClassPair(super_class, name, 0)))
     C.objc_registerClassPair(class)
     return class
@@ -208,30 +208,8 @@ local function addMethod(class, selector, types, func)
     assert(type(func) == "function")
     assert(type(types) == "string") -- and #types - 1 == debug.getinfo(func).nparams)
 
-    local class = cls(class)
-    local selector = sel(selector)
-
-    -- local methodSignature = assert(class:instanceMethodSignatureForSelector(selector))
-    -- print(class, selector, methodSignature)
-
-    -- local c_signature, objc_signature = {}, {}
-    -- local return_type = ffi.string(methodSignature.methodReturnType)
-    -- table.insert(objc_signature, return_type)
-    -- table.insert(c_signature, type_encoding[return_type])
-    -- table.insert(c_signature, "(*)(")
-
-    -- local num_args = tonumber(methodSignature.numberOfArguments)
-    -- for i = 1, num_args do
-    --     local arg_type = ffi.string(methodSignature:getArgumentTypeAtIndex(i - 1))
-    --     table.insert(objc_signature, arg_type)
-    --     table.insert(c_signature, type_encoding[arg_type])
-    --     if i < num_args then table.insert(c_signature, ",") end
-    -- end
-    -- table.insert(c_signature, ")")
-
-    -- local c_signature = table.concat(c_signature)
-    -- local objc_signature = table.concat(objc_signature)
-    -- print(class, selector, objc_signature, c_signature)
+    local class = cls(class) ---@diagnostic disable-line: redefined-local
+    local selector = sel(selector) ---@diagnostic disable-line: redefined-local
 
     local signature = {}
     table.insert(signature, type_encoding[types:sub(1, 1)]) -- return type
@@ -241,7 +219,7 @@ local function addMethod(class, selector, types, func)
         if i < #types then table.insert(signature, ",") end
     end
     table.insert(signature, ")")
-    local signature = table.concat(signature)
+    local signature = table.concat(signature) ---@diagnostic disable-line: redefined-local
     -- print(class, selector, signature, types)
 
     local imp = ffi.cast("IMP", ffi.cast(signature, func))
@@ -259,8 +237,7 @@ local objc = setmetatable({
     ptr = ptr,
 }, {
     __index = function(_, name)
-        -- use key to lookup class by name
-        return cls(name)
+        return cls(name) -- use key to lookup class by name
     end
 })
 

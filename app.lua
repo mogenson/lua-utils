@@ -47,7 +47,7 @@ end
 local scrollView = nil -- forward declaration
 
 local function appendString(str)
-    local textView = scrollView.documentView
+    local textView = assert(scrollView).documentView
     local contents = textView.string
     textView.string = contents:stringByAppendingString(NSStr("\n" .. str))
     textView:scrollToEndOfDocument(textView)
@@ -62,14 +62,14 @@ assert(NSApp:setActivationPolicy(NSApplicationActivationPolicyRegular) == YES)
 
 local AppDelegateClass = objc.newClass("AppDelegate")
 objc.addMethod(AppDelegateClass, "applicationShouldTerminateAfterLastWindowClosed:", "B@:",
-    function(self, cmd)
+    function(self, _cmd)
         print("last window closed")
         return YES
     end)
 
 local i = 1
 objc.addMethod(AppDelegateClass, button_action_selector, "v@:@",
-    function(self, cmd, sender)
+    function(self, _cmd, sender)
         local title = ffi.string(sender.title:UTF8String())
         print(title .. " clicked")
         appendString("line " .. tostring(i))
@@ -102,8 +102,10 @@ appMenu:addItem(closeMenuItem)
 appMenuItem:setSubmenu(appMenu)
 
 local rect = ffi.new("CGRect", { origin = { x = 0, y = 0 }, size = { width = 200, height = 300 } })
-local styleMask = bit.bor(NSWindowStyleMaskTitled, NSWindowStyleMaskClosable, NSWindowStyleMaskMiniaturizable,
-    NSWindowStyleMaskResizable)
+---@diagnostic disable: param-type-mismatch
+local styleMask = bit.bor(NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
+    NSWindowStyleMaskMiniaturizable, NSWindowStyleMaskResizable)
+---@diagnostic enable: param-type-mismatch
 local window = objc.NSWindow:alloc():initWithContentRect_styleMask_backing_defer(rect, styleMask,
     NSBackingStoreBuffered, NO)
 window:autorelease()
