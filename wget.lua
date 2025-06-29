@@ -1,13 +1,20 @@
-local ffi = require('ffi')
-local bit = require('bit')
 local loop = require("libuv")
 local multi = require("libcurl")
 
 
-for i = 1, 2 do
-    multi:add('http://httpbin.org/get')
+for i, url in ipairs(arg) do
+    local name = i .. ".download"
+    print(string.format("Downloading %s as %s", url, name))
+    local file = assert(io.open(i .. ".download", "w"))
+    multi:add(url,
+        function(data)
+            file:write(data)
+        end,
+        function(result)
+            print(string.format("%s finished with status: %d", name, result))
+            file:close()
+        end
+    )
 end
 
-print("uv run start")
 loop:run()
-print("uv run stop")

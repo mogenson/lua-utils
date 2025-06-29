@@ -1,8 +1,7 @@
--- FFI example for libcurl integration into the libuv event loop
 local ffi = require('ffi')
 local bit = require('bit')
+local uv = require("libuv")
 
--- CURL FFI ------------------------------------------------------------------
 local libcurl = ffi.load('curl')
 ffi.cdef([[
     enum CURLMSG {
@@ -13,6 +12,11 @@ ffi.cdef([[
 
     struct CURLMsg {
         enum CURLMSG msg;
+        void* handle;
+        union {
+            void* whatever;
+            int result;
+        } data;
     };
 
     enum curl_global_option
@@ -53,7 +57,8 @@ ffi.cdef([[
         CURLOPT_SSL_VERIFYPEER = 64,
         CURLOPT_URL            = 10002,
         CURLOPT_USERAGENT      = 10018,
-        CURLOPT_WRITEFUNCTION  = 20011
+        CURLOPT_WRITEFUNCTION  = 20011,
+        CURLOPT_WRITEDATA      = 10001,
     };
 
     enum curl_cselect_option
@@ -64,38 +69,39 @@ ffi.cdef([[
 
     int curl_global_init(enum curl_global_option option);
 
-    typedef void* CURL;
-
-    CURL  curl_easy_init();
-    int   curl_easy_setopt(CURL curl, enum curl_option option, ...);
-    int   curl_easy_perform(CURL curl);
-    void  curl_easy_cleanup(CURL curl);
+    void* curl_easy_init();
+    int   curl_easy_setopt(void* curl, enum curl_option option, ...);
+    int   curl_easy_perform(void* curl);
+    void  curl_easy_cleanup(void* curl);
     char* curl_easy_strerror(int code);
 
-    typedef void* CURLM;
+    void*   curl_multi_init();
+    int     curl_multi_setopt(void* curlm, enum curl_multi_option option, ...);
+    int     curl_multi_add_handle(void* curlm, void* curl_handle);
+    int     curl_multi_socket_action(void* curlm, int s, int ev_bitmask, int *running_handles);
+    int     curl_multi_assign(void* curlm, int sockfd, void *sockp);
+    int     curl_multi_remove_handle(void* curlm, void* curl_handle);
+    struct CURLMsg *curl_multi_info_read(void* curlm, int *msgs_in_queue);
 
-    CURLM   curl_multi_init();
-    int     curl_multi_setopt(CURLM curlm, enum curl_multi_option option, ...);
-    int     curl_multi_add_handle(CURLM curlm, CURL curl_handle);
-    int     curl_multi_socket_action(CURLM curlm, int s, int ev_bitmask, int *running_handles);
-    int     curl_multi_assign(CURLM curlm, int sockfd, void *sockp);
-    int     curl_multi_remove_handle(CURLM curlm, CURL curl_handle);
-    struct CURLMsg *curl_multi_info_read(CURLM curlm, int *msgs_in_queue);
-
-    typedef int (*curlm_socketfunction)(CURLM curlm, int sockfd, int ev_bitmask, int *running_handles);
-    typedef int (*curlm_timerfunction)(CURLM curlm, long timeout_ms, int *userp);
+    typedef int (*curlm_socketfunction)(void* curlm, int sockfd, int ev_bitmask, int *running_handles);
+    typedef int (*curlm_timerfunction)(void* curlm, long timeout_ms, int *userp);
     typedef size_t (*curl_datafunction)(char *ptr, size_t size, size_t nmemb, void *userdata);
 ]])
 
--- UV FFI --------------------------------------------------------------------
-local loop = require("libuv")
+local function address(cdata)
+    return tonumber(ffi.cast("intptr_t", cdata))
+end
 
--- cURL Multi with uv --------------------------------------------------------
 local Multi = {}
 Multi.__index = Multi
 
 function Multi.new()
-    local self = { multi = libcurl.curl_multi_init(), polls = {}, timer = loop:new_timer() }
+    local self = {
+        multi = libcurl.curl_multi_init(),
+        polls = {},
+        handles = {},
+        timer = uv:new_timer()
+    }
     libcurl.curl_multi_setopt(self.multi, libcurl.CURLMOPT_SOCKETFUNCTION,
         ffi.cast("curlm_socketfunction", function(handle, fd, action)
             return Multi.socket_function(self, handle, fd, action)
@@ -107,8 +113,7 @@ function Multi.new()
     return setmetatable(self, Multi)
 end
 
-function Multi:add(url)
-    print("add ", url)
+function Multi:add(url, data_callback, finished_callback)
     local handle = libcurl.curl_easy_init()
     libcurl.curl_easy_setopt(handle,
         libcurl.CURLOPT_URL,
@@ -116,25 +121,33 @@ function Multi:add(url)
     libcurl.curl_easy_setopt(handle,
         libcurl.CURLOPT_WRITEFUNCTION,
         ffi.cast('curl_datafunction', function(...) return Multi.data_function(self, ...) end))
+    libcurl.curl_easy_setopt(handle, libcurl.CURLOPT_WRITEDATA, handle);
     libcurl.curl_multi_add_handle(self.multi, handle);
+    self.handles[address(handle)] = {
+        data_callback = data_callback,
+        finished_callback = finished_callback,
+    }
 end
 
-function Multi:data_function(ptr, size, nmemb, userdata)
-    print(ffi.string(ptr))
-    return size
+function Multi:data_function(ptr, size, nmemb, handle)
+    local len = size * nmemb
+    local callback = (self.handles[address(handle)] or {}).data_callback
+    if callback then
+        callback(ffi.string(ptr, len))
+    end
+    return len
 end
 
 function Multi:socket_function(handle, fd, action)
-    print("on socket")
     self.timer:stop()
 
     local function perform(handle, status, events)
         assert(status >= 0)
 
         local running_handles = ffi.new('int[1]')
-        if events == loop.UV_READABLE then
+        if events == uv.UV_READABLE then
             libcurl.curl_multi_socket_action(self.multi, fd, libcurl.CURL_CSELECT_IN, running_handles)
-        elseif events == loop.UV_WRITABLE then
+        elseif events == uv.UV_WRITABLE then
             libcurl.curl_multi_socket_action(self.multi, fd, libcurl.CURL_CSELECT_OUT, running_handles)
         end
 
@@ -143,21 +156,26 @@ function Multi:socket_function(handle, fd, action)
             msg = libcurl.curl_multi_info_read(self.multi, pending)
             if msg ~= nil and msg.msg == libcurl.CURLMSG_DONE then
                 libcurl.curl_multi_remove_handle(self.multi, handle)
-                libcurl.curl_easy_cleanup(handle)
+                libcurl.curl_easy_cleanup(msg.handle)
+                local callback = (self.handles[address(msg.handle)] or {}).finished_callback
+                self.handles[address(msg.handle)] = nil
+                if callback then
+                    callback(tonumber(msg.data.result))
+                end
             end
         until msg == nil
     end
 
     local poll = self.polls[fd]
     if not poll then
-        poll = loop:new_poll(fd)
+        poll = uv:new_poll(fd)
         self.polls[fd] = poll
     end
 
     if action == libcurl.CURL_POLL_IN then
-        poll:start(loop.UV_READABLE, perform)
+        poll:start(uv.UV_READABLE, perform)
     elseif action == libcurl.CURL_POLL_OUT then
-        poll:start(loop.UV_WRITABLE, perform)
+        poll:start(uv.UV_WRITABLE, perform)
     elseif action == libcurl.CURL_POLL_REMOVE then
         poll:stop()
         self.polls[fd] = nil
@@ -167,7 +185,6 @@ function Multi:socket_function(handle, fd, action)
 end
 
 function Multi:timer_function(curlm, ms)
-    print("on timer")
     ms = tonumber(ms)
     self.timer:stop()
     if ms < 0 then return 0 end
