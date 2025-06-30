@@ -1,3 +1,4 @@
 *.luac
 *.ljbc
 *.download
+*.dylib

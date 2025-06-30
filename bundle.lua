@@ -2,7 +2,7 @@
 
 local package_preload = 'package.preload["%s"] = function()\n%s\nend\n'
 local require_pattern = [[require%s*%(?%s*(['"])(.-)%1%s*%)?]]
-local loader_script = '#!/bin/sh\ntail -n +4 "$0" | %s -\nexit\n'
+local loader_script = '#!/bin/sh\ntail -n +4 "$0" | %s - "$@"\nexit\n'
 
 if not arg[1] or arg[1]:match("^-+h") then
     print(string.format("Usage: %s main.lua", arg[0]))
