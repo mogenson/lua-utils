@@ -1,5 +1,4 @@
 local ffi = require("ffi")
-local bit = require("bit")
 
 local libuv = ffi.load("libuv")
 
@@ -88,6 +87,9 @@ ffi.cdef([[
     const char* uv_strerror(int err);
 ]])
 
+--- Checks the status of a libuv operation and throws an error if it's negative.
+---@param status number
+---@return number
 local function uv_assert(status)
     if status < 0 then
         local name = ffi.string(libuv.uv_err_name(status))
@@ -103,19 +105,32 @@ ffi.cdef([[
     uv_handle_type uv_handle_get_type(const uv_handle_t *handle);
     const char *uv_handle_type_name(uv_handle_type type);
     void uv_close(uv_handle_t *handle, uv_close_cb close_cb);
+    int uv_is_closing(const uv_handle_t *handle);
 ]])
 
 local Handle = {}
 Handle.__index = Handle
 
-function Handle.__tostring(self)
+--- Returns a string representation of a libuv handle.
+---@param self ffi.cdata*
+---@return string
+function Handle:__tostring()
     local id = libuv.uv_handle_get_type(ffi.cast("uv_handle_t*", self))
     return ffi.string(libuv.uv_handle_type_name(id))
 end
 
-function Handle.__gc(self)
-    print(string.format("handle %s closing in __gc", tostring(self)));
+--- Close a libuv handle
+---@param self ffi.cdata*
+function Handle:close()
     libuv.uv_close(ffi.cast("uv_handle_t*", self), nil)
+end
+
+--- This is the garbage collection metamethod for libuv handles.
+---@param self ffi.cdata*
+function Handle:__gc()
+    if libuv.uv_is_closing(ffi.cast("uv_handle_t*", self)) ~= 0 then
+        libuv.uv_close(ffi.cast("uv_handle_t*", self), nil)
+    end
 end
 
 ffi.cdef([[
@@ -132,24 +147,36 @@ ffi.cdef([[
   int uv_run(uv_loop_t* loop, uv_run_mode mode);
 ]])
 
-local Loop = setmetatable({}, { __index = libuv })
+local Loop = {}
 Loop.__index = Loop
+setmetatable(Loop, { __index = libuv })
 ffi.metatype(ffi.typeof("uv_loop_t"), Loop)
 
+--- Returns the current time in milliseconds.
+---@param self ffi.cdata*
+---@return number
 function Loop:now()
-    return tonumber(libuv.uv_loop_now(self))
+    return assert(tonumber(libuv.uv_loop_now(self)))
 end
 
+--- Updates the event loop's concept of "now".
+---@param self ffi.cdata*
 function Loop:update_time()
     libuv.uv_update_time(self)
 end
 
+--- Stops the event loop.
+---@param self ffi.cdata*
 function Loop:stop()
     libuv.uv_stop(self)
 end
 
+--- Start the event loop.
+---@param self ffi.cdata*
+---@param mode number a member of the uv_run_mode enum
+---@return number
 function Loop:run(mode)
-    return tonumber(uv_assert(libuv.uv_run(self, mode or libuv.UV_RUN_DEFAULT)))
+    return assert(tonumber(uv_assert(libuv.uv_run(self, mode or libuv.UV_RUN_DEFAULT))))
 end
 
 ffi.cdef([[
@@ -164,20 +191,33 @@ local Timer = setmetatable({}, Handle)
 Timer.__index = Timer
 ffi.metatype(ffi.typeof("uv_timer_t"), Timer)
 
+--- Creates a new timer.
+---@param self ffi.cdata*
+---@return ffi.cdata*
 function Loop:new_timer()
     local timer = ffi.new("uv_timer_t")
     uv_assert(libuv.uv_timer_init(self, timer))
     return timer
 end
 
+--- Starts a timer.
+---@param self ffi.cdata*
+---@param timeout number
+---@param callback function
 function Timer:start(timeout, callback)
     uv_assert(libuv.uv_timer_start(self, ffi.cast("uv_timer_cb", callback), timeout, 0))
 end
 
+--- Starts a recurring timer.
+---@param self ffi.cdata*
+---@param interval number
+---@param callback function
 function Timer:recurring(interval, callback)
     uv_assert(libuv.uv_timer_start(self, ffi.cast("uv_timer_cb", callback), interval, interval))
 end
 
+--- Stops a timer.
+---@param self ffi.cdata*
 function Timer:stop()
     uv_assert(libuv.uv_timer_stop(self))
 end
@@ -199,16 +239,26 @@ local Poll = setmetatable({}, Handle)
 Poll.__index = Poll
 ffi.metatype(ffi.typeof("uv_poll_t"), Poll)
 
+--- Creates a new poll handle.
+---@param self ffi.cdata*
+---@param fd number
+---@return ffi.cdata*
 function Loop:new_poll(fd)
     local poll = ffi.new("uv_poll_t")
     uv_assert(libuv.uv_poll_init(self, poll, fd))
     return poll
 end
 
+--- Starts polling a file descriptor.
+---@param self ffi.cdata*
+---@param events number a member of the uv_poll_event enum
+---@param callback function
 function Poll:start(events, callback)
     uv_assert(libuv.uv_poll_start(self, events, ffi.cast("uv_poll_cb", callback)))
 end
 
+--- Stops polling a file descriptor.
+---@param self ffi.cdata*
 function Poll:stop()
     uv_assert(libuv.uv_poll_stop(self))
 end
