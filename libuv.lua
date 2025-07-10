@@ -1,8 +1,14 @@
 local ffi = require("ffi")
+local cast = ffi.cast
+local C = ffi.C
 
 local libuv = ffi.load("libuv")
 
 ffi.cdef([[
+    typedef enum {
+        UV_EOF = -4095
+    } uv_errno_t;
+
     typedef enum {
         UV_UNKNOWN_HANDLE = 0,
         UV_ASYNC,
@@ -87,25 +93,28 @@ ffi.cdef([[
     const char* uv_strerror(int err);
 ]])
 
+local function get_error(status)
+    local name = ffi.string(libuv.uv_err_name(status))
+    local err = ffi.string(libuv.uv_strerror(status))
+    return string.format("%: %", name, err)
+end
+
 --- Checks the status of a libuv operation and throws an error if it's negative.
 ---@param status number
 ---@return number
-local function uv_assert(status)
-    if status < 0 then
-        local name = ffi.string(libuv.uv_err_name(status))
-        local err = ffi.string(libuv.uv_strerror(status))
-        error(string.format("%: %", name, err))
-    end
-    return status
+local function check(status)
+    return status < 0 and error(get_error(status)) or assert(tonumber(status))
 end
 
 ffi.cdef([[
     typedef void (*uv_close_cb)(uv_handle_t *handle);
 
-    uv_handle_type uv_handle_get_type(const uv_handle_t *handle);
     const char *uv_handle_type_name(uv_handle_type type);
-    void uv_close(uv_handle_t *handle, uv_close_cb close_cb);
     int uv_is_closing(const uv_handle_t *handle);
+    uv_handle_type uv_handle_get_type(const uv_handle_t *handle);
+    void uv_close(uv_handle_t *handle, uv_close_cb close_cb);
+    void* uv_handle_get_data(const uv_handle_t* handle);
+    void* uv_handle_set_data(uv_handle_t* handle, void* data);
 ]])
 
 local Handle = {}
@@ -115,21 +124,26 @@ Handle.__index = Handle
 ---@param self ffi.cdata*
 ---@return string
 function Handle:__tostring()
-    local id = libuv.uv_handle_get_type(ffi.cast("uv_handle_t*", self))
+    local id = libuv.uv_handle_get_type(cast("uv_handle_t*", self))
     return ffi.string(libuv.uv_handle_type_name(id))
 end
 
 --- Close a libuv handle
 ---@param self ffi.cdata*
 function Handle:close()
-    libuv.uv_close(ffi.cast("uv_handle_t*", self), nil)
+    libuv.uv_close(cast("uv_handle_t*", self), nil)
+    local cached = cast('uv_buf_t*', UV.uv_handle_get_data(handle))
+    if cached ~= nil then
+        C.free(cached.base)
+        C.free(cached)
+    end
 end
 
 --- This is the garbage collection metamethod for libuv handles.
 ---@param self ffi.cdata*
 function Handle:__gc()
-    if libuv.uv_is_closing(ffi.cast("uv_handle_t*", self)) ~= 0 then
-        libuv.uv_close(ffi.cast("uv_handle_t*", self), nil)
+    if libuv.uv_is_closing(cast("uv_handle_t*", self)) ~= 0 then
+        libuv.uv_close(cast("uv_handle_t*", self), nil)
     end
 end
 
@@ -140,11 +154,11 @@ ffi.cdef([[
         UV_RUN_NOWAIT
     } uv_run_mode;
 
-  uv_loop_t* uv_default_loop();
-  void uv_stop(uv_loop_t* loop);
-  uint64_t uv_now(const uv_loop_t* loop);
-  void uv_update_time(uv_loop_t *loop);
-  int uv_run(uv_loop_t* loop, uv_run_mode mode);
+    uv_loop_t* uv_default_loop();
+    void uv_stop(uv_loop_t* loop);
+    uint64_t uv_now(const uv_loop_t* loop);
+    void uv_update_time(uv_loop_t *loop);
+    int uv_run(uv_loop_t* loop, uv_run_mode mode);
 ]])
 
 local Loop = {}
@@ -174,17 +188,17 @@ end
 --- Start the event loop.
 ---@param self ffi.cdata*
 ---@param mode number a member of the uv_run_mode enum
----@return number
+-- @return number
 function Loop:run(mode)
-    return assert(tonumber(uv_assert(libuv.uv_run(self, mode or libuv.UV_RUN_DEFAULT))))
+    return check(libuv.uv_run(self, mode or libuv.UV_RUN_DEFAULT))
 end
 
 ffi.cdef([[
-  typedef void (*uv_timer_cb)(uv_timer_t* handle);
+    typedef void (*uv_timer_cb)(uv_timer_t* handle);
 
-  int uv_timer_init(uv_loop_t* loop, uv_timer_t* handle);
-  int uv_timer_start(uv_timer_t* handle, uv_timer_cb cb, uint64_t timeout, uint64_t repeat);
-  int uv_timer_stop(uv_timer_t* handle);
+    int uv_timer_init(uv_loop_t* loop, uv_timer_t* handle);
+    int uv_timer_start(uv_timer_t* handle, uv_timer_cb cb, uint64_t timeout, uint64_t repeat);
+    int uv_timer_stop(uv_timer_t* handle);
 ]])
 
 local Timer = setmetatable({}, Handle)
@@ -196,7 +210,7 @@ ffi.metatype(ffi.typeof("uv_timer_t"), Timer)
 ---@return ffi.cdata*
 function Loop:new_timer()
     local timer = ffi.new("uv_timer_t")
-    uv_assert(libuv.uv_timer_init(self, timer))
+    check(libuv.uv_timer_init(self, timer))
     return timer
 end
 
@@ -205,7 +219,7 @@ end
 ---@param timeout number
 ---@param callback function
 function Timer:start(timeout, callback)
-    uv_assert(libuv.uv_timer_start(self, ffi.cast("uv_timer_cb", callback), timeout, 0))
+    check(libuv.uv_timer_start(self, cast("uv_timer_cb", callback), timeout, 0))
 end
 
 --- Starts a recurring timer.
@@ -213,26 +227,26 @@ end
 ---@param interval number
 ---@param callback function
 function Timer:recurring(interval, callback)
-    uv_assert(libuv.uv_timer_start(self, ffi.cast("uv_timer_cb", callback), interval, interval))
+    check(libuv.uv_timer_start(self, cast("uv_timer_cb", callback), interval, interval))
 end
 
 --- Stops a timer.
 ---@param self ffi.cdata*
 function Timer:stop()
-    uv_assert(libuv.uv_timer_stop(self))
+    check(libuv.uv_timer_stop(self))
 end
 
 ffi.cdef([[
-  enum uv_poll_event {
-    UV_READABLE = 1,
-    UV_WRITABLE = 2,
-    UV_DISCONNECT = 4,
-    UV_PRIORITIZED = 8
-  };
-  typedef void (*uv_poll_cb)(uv_poll_t *handle, int status, int events);
-  int uv_poll_init(uv_loop_t *loop, uv_poll_t *handle, int fd);
-  int uv_poll_start(uv_poll_t *handle, int events, uv_poll_cb cb);
-  int uv_poll_stop(uv_poll_t *poll);
+    enum uv_poll_event {
+        UV_READABLE = 1,
+        UV_WRITABLE = 2,
+        UV_DISCONNECT = 4,
+        UV_PRIORITIZED = 8
+    };
+    typedef void (*uv_poll_cb)(uv_poll_t *handle, int status, int events);
+    int uv_poll_init(uv_loop_t *loop, uv_poll_t *handle, int fd);
+    int uv_poll_start(uv_poll_t *handle, int events, uv_poll_cb cb);
+    int uv_poll_stop(uv_poll_t *poll);
 ]])
 
 local Poll = setmetatable({}, Handle)
@@ -245,7 +259,7 @@ ffi.metatype(ffi.typeof("uv_poll_t"), Poll)
 ---@return ffi.cdata*
 function Loop:new_poll(fd)
     local poll = ffi.new("uv_poll_t")
-    uv_assert(libuv.uv_poll_init(self, poll, fd))
+    check(libuv.uv_poll_init(self, poll, fd))
     return poll
 end
 
@@ -254,13 +268,143 @@ end
 ---@param events number a member of the uv_poll_event enum
 ---@param callback function
 function Poll:start(events, callback)
-    uv_assert(libuv.uv_poll_start(self, events, ffi.cast("uv_poll_cb", callback)))
+    check(libuv.uv_poll_start(self, events, cast("uv_poll_cb", callback)))
 end
 
 --- Stops polling a file descriptor.
 ---@param self ffi.cdata*
 function Poll:stop()
-    uv_assert(libuv.uv_poll_stop(self))
+    check(libuv.uv_poll_stop(self))
+end
+
+ffi.cdef([[
+    int uv_cancel(uv_req_t *req);
+    uv_req_type uv_req_get_type(const uv_req_t* req);
+    const char* uv_req_type_name(uv_req_type type);
+]])
+
+local Request = {}
+Request.__index = Request
+
+function Request:cancel()
+    check(libuv.uv_cancel(cast("uv_req_t*", self)))
+end
+
+function Request:__tostring()
+    local id = libuv.uv_req_get_type(cast("uv_req_t*", self))
+    return ffi.string(libuv.uv_req_type_name(id))
+end
+
+local Connect = setmetatable({}, Request)
+Connect.__index = Connect
+ffi.metatype(ffi.typeof("uv_connect_t"), Connect)
+
+local Write = setmetatable({}, Request)
+Write.__index = Write
+ffi.metatype(ffi.typeof("uv_write_t"), Write)
+
+local Shutdown = setmetatable({}, Request)
+Shutdown.__index = Shutdown
+ffi.metatype(ffi.typeof("uv_shutdown_t"), Shutdown)
+
+ffi.cdef([[
+    typedef struct uv_buf_t {
+        char* base;
+        size_t len;
+    } uv_buf_t;
+
+    typedef void (*uv_alloc_cb)(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf);
+    typedef void (*uv_connect_cb)(uv_connect_t *req, int status);
+    typedef void (*uv_connection_cb)(uv_stream_t *server, int status);
+    typedef void (*uv_read_cb)(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
+    typedef void (*uv_shutdown_cb)(uv_shutdown_t *req, int status);
+    typedef void (*uv_write_cb)(uv_write_t *req, int status);
+
+    int uv_accept(uv_stream_t *server, uv_stream_t *client);
+    int uv_listen(uv_stream_t *stream, int backlog, uv_connection_cb cb);
+    int uv_read_start(uv_stream_t *stream, uv_alloc_cb alloc_cb, uv_read_cb read_cb);
+    int uv_read_stop(uv_stream_t*);
+    int uv_shutdown(uv_shutdown_t *req, uv_stream_t *handle, uv_shutdown_cb cb);
+    int uv_write(uv_write_t *req, uv_stream_t *handle, const uv_buf_t bufs[], unsigned int nbufs, uv_write_cb cb);
+]])
+
+local Stream = setmetatable({}, Handle)
+Stream.__index = Stream
+ffi.metatype(ffi.typeof("uv_stream_t"), Stream)
+
+function Stream:shutdown(callback)
+    local req = cast("uv_shutdown_t*", C.malloc(ffi.sizeof("uv_shutdown_t")))
+    local handle = cast("uv_stream_t*", self)
+    local cb = cast("uv_shutdown_cb", function(req, status)
+        C.free(req)
+        check(status)
+        if callback then callback() end
+    end)
+    check(libuv.uv_shutdown(req, handle, cb))
+end
+
+function Stream:listen(backlog, callback)
+    local stream = cast("uv_stream_t*", self)
+    local cb = cast("uv_connection", callback)
+    check(libuv.uv_listen(stream, backlog, cb))
+end
+
+function Stream:accept(client)
+    local server = cast("uv_stream_t*", self)
+    local client = cast("uv_stream_t*", client)
+    check(libuv.uv_accept(server, client))
+end
+
+function Stream:read_start(callback)
+    local stream = cast("uv_stream_t*", self)
+
+    local alloc_cb = cast("uv_alloc_cb", function(handle, suggested_size, buf)
+        local cached = cast("uv_buf_t*", libuv.uv_handle_get_data(handle))
+        if cached ~= nil then
+            buf.base = cached.base
+            buf.len = cached.len
+        else
+            local base = C.malloc(suggested_size)
+            buf.base = base
+            buf.len = suggested_size
+            local data = cast("uv_buf_t*", C.malloc(ffi.sizeof("uv_buf_t")))
+            data.base = base
+            data.len = suggested_size
+            libuv.uv_handle_set_data(handle, data)
+        end
+    end)
+
+    local read_cb = cast("uv_read_cb", function(stream, nread, buf)
+        if nread == 0 then
+            return
+        elseif nread == libuv.UV_EOF then
+            callback(nil)
+        else
+            check(nread) -- shoud be > 0
+            callback(ffi.string(buf.base, nread))
+        end
+    end)
+
+    check(libuv.uv_read_start(stream, alloc_cb, read_cb))
+end
+
+function Stream:read_stop()
+    check(libuv.uv_read_stop(cast("uv_stream_t*", self)))
+end
+
+function Stream:write(data, callback)
+    local req = cast("uv_write_t*", C.malloc(ffi.sizeof("uv_write_t")))
+    local handle = cast("uv_stream_t*", self)
+    local bufs = ffi.new("uv_buf_t[1]")
+    bufs[0].base = cast("char*", data)
+    bufs[0].len = #data
+    local nbufs = 1
+    local cb = cast("uv_write_cb", function(req, status)
+        C.free(req)
+        check(status)
+        if callback then callback() end
+    end)
+    check(libuv.uv_write(req, handle, bufs, nbufs, cb))
 end
 
 return libuv.uv_default_loop()
