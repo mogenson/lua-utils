@@ -2,6 +2,27 @@ local ffi = require("ffi")
 local cast = ffi.cast
 local C = ffi.C
 
+ffi.cdef([[
+    struct sockaddr {
+      unsigned short    sa_family;
+      char              sa_data[14];
+    };
+
+    struct in_addr {
+        unsigned long s_addr;
+    };
+
+    struct sockaddr_in {
+        short            sin_family;
+        unsigned short   sin_port;
+        struct in_addr   sin_addr;
+        char             sin_zero[8];
+    };
+
+void *malloc(size_t size);
+void free(void *ptr);
+]])
+
 local libuv = ffi.load("libuv")
 
 ffi.cdef([[
@@ -99,7 +120,7 @@ local function get_error(status)
     return string.format("%: %", name, err)
 end
 
---- Checks the status of a libuv operation and throws an error if it's negative.
+---Checks the status of a libuv operation and throws an error if it's negative.
 ---@param status number
 ---@return number
 local function check(status)
@@ -120,7 +141,7 @@ ffi.cdef([[
 local Handle = {}
 Handle.__index = Handle
 
---- Returns a string representation of a libuv handle.
+---Returns a string representation of a libuv handle.
 ---@param self ffi.cdata*
 ---@return string
 function Handle:__tostring()
@@ -128,18 +149,18 @@ function Handle:__tostring()
     return ffi.string(libuv.uv_handle_type_name(id))
 end
 
---- Close a libuv handle
+---Close a libuv handle
 ---@param self ffi.cdata*
 function Handle:close()
     libuv.uv_close(cast("uv_handle_t*", self), nil)
-    local cached = cast('uv_buf_t*', UV.uv_handle_get_data(handle))
+    local cached = cast("uv_buf_t*", libuv.uv_handle_get_data(cast("const uv_handle_t*", self)))
     if cached ~= nil then
         C.free(cached.base)
         C.free(cached)
     end
 end
 
---- This is the garbage collection metamethod for libuv handles.
+---This is the garbage collection metamethod for libuv handles.
 ---@param self ffi.cdata*
 function Handle:__gc()
     if libuv.uv_is_closing(cast("uv_handle_t*", self)) ~= 0 then
@@ -166,26 +187,26 @@ Loop.__index = Loop
 setmetatable(Loop, { __index = libuv })
 ffi.metatype(ffi.typeof("uv_loop_t"), Loop)
 
---- Returns the current time in milliseconds.
+---Returns the current time in milliseconds.
 ---@param self ffi.cdata*
 ---@return number
 function Loop:now()
     return assert(tonumber(libuv.uv_loop_now(self)))
 end
 
---- Updates the event loop's concept of "now".
+---Updates the event loop's concept of "now".
 ---@param self ffi.cdata*
 function Loop:update_time()
     libuv.uv_update_time(self)
 end
 
---- Stops the event loop.
+---Stops the event loop.
 ---@param self ffi.cdata*
 function Loop:stop()
     libuv.uv_stop(self)
 end
 
---- Start the event loop.
+---Start the event loop.
 ---@param self ffi.cdata*
 ---@param mode number a member of the uv_run_mode enum
 -- @return number
@@ -205,7 +226,7 @@ local Timer = setmetatable({}, Handle)
 Timer.__index = Timer
 ffi.metatype(ffi.typeof("uv_timer_t"), Timer)
 
---- Creates a new timer.
+---Creates a new timer.
 ---@param self ffi.cdata*
 ---@return ffi.cdata*
 function Loop:new_timer()
@@ -214,7 +235,7 @@ function Loop:new_timer()
     return timer
 end
 
---- Starts a timer.
+---Starts a timer.
 ---@param self ffi.cdata*
 ---@param timeout number
 ---@param callback function
@@ -222,7 +243,7 @@ function Timer:start(timeout, callback)
     check(libuv.uv_timer_start(self, cast("uv_timer_cb", callback), timeout, 0))
 end
 
---- Starts a recurring timer.
+---Starts a recurring timer.
 ---@param self ffi.cdata*
 ---@param interval number
 ---@param callback function
@@ -230,7 +251,7 @@ function Timer:recurring(interval, callback)
     check(libuv.uv_timer_start(self, cast("uv_timer_cb", callback), interval, interval))
 end
 
---- Stops a timer.
+---Stops a timer.
 ---@param self ffi.cdata*
 function Timer:stop()
     check(libuv.uv_timer_stop(self))
@@ -253,7 +274,7 @@ local Poll = setmetatable({}, Handle)
 Poll.__index = Poll
 ffi.metatype(ffi.typeof("uv_poll_t"), Poll)
 
---- Creates a new poll handle.
+---Creates a new poll handle.
 ---@param self ffi.cdata*
 ---@param fd number
 ---@return ffi.cdata*
@@ -263,7 +284,7 @@ function Loop:new_poll(fd)
     return poll
 end
 
---- Starts polling a file descriptor.
+---Starts polling a file descriptor.
 ---@param self ffi.cdata*
 ---@param events number a member of the uv_poll_event enum
 ---@param callback function
@@ -271,7 +292,7 @@ function Poll:start(events, callback)
     check(libuv.uv_poll_start(self, events, cast("uv_poll_cb", callback)))
 end
 
---- Stops polling a file descriptor.
+---Stops polling a file descriptor.
 ---@param self ffi.cdata*
 function Poll:stop()
     check(libuv.uv_poll_stop(self))
@@ -345,7 +366,10 @@ end
 
 function Stream:listen(backlog, callback)
     local stream = cast("uv_stream_t*", self)
-    local cb = cast("uv_connection", callback)
+    local cb = cast("uv_connection_cb", function(server, status)
+        check(status)
+        callback()
+    end)
     check(libuv.uv_listen(stream, backlog, cb))
 end
 
@@ -405,6 +429,52 @@ function Stream:write(data, callback)
         if callback then callback() end
     end)
     check(libuv.uv_write(req, handle, bufs, nbufs, cb))
+end
+
+ffi.cdef([[
+    int uv_ip4_addr(const char *ip, int port, struct sockaddr_in *addr);
+
+    int uv_tcp_init(uv_loop_t* loop, uv_tcp_t* handle);
+    int uv_tcp_bind(uv_tcp_t* handle, const struct sockaddr* addr, unsigned int flags);
+    int uv_tcp_connect(uv_connect_t* req, uv_tcp_t* handle, const struct sockaddr_in* addr, uv_connect_cb cb);
+]])
+
+local Tcp = setmetatable({}, Stream)
+Tcp.__index = Tcp
+ffi.metatype(ffi.typeof("uv_tcp_t"), Tcp)
+
+---Creates a new Tcp socket
+---@param self ffi.cdata*
+---@return ffi.cdata*
+function Loop:new_tcp()
+    local tcp = ffi.new("uv_tcp_t")
+    check(libuv.uv_tcp_init(self, tcp))
+    return tcp
+end
+
+---Bind socket to an IP address and port
+---@param host string
+---@param port number
+function Tcp:bind(host, port)
+    local addr = ffi.new("struct sockaddr_in")
+    check(libuv.uv_ip4_addr(host, port, addr))
+    check(libuv.uv_tcp_bind(self, cast("const struct sockaddr*", addr), 0))
+end
+
+---Connect to an IP address and port
+---@param host string
+---@param port number
+---@param callback function
+function Tcp:connect(host, port, callback)
+    local addr = ffi.new("struct sockaddr_in")
+    check(libuv.uv_ip4_addr(host, port, addr))
+    local req = cast("uv_connect_t*", C.malloc(ffi.sizeof("uv_connect_t")))
+    local cb = cast("uv_connect_cb", function(req, status)
+        C.free(req)
+        check(status)
+        callback()
+    end)
+    check(libuv.uv_tcp_connect(req, self, addr, cb))
 end
 
 return libuv.uv_default_loop()
