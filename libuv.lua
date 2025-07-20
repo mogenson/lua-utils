@@ -114,6 +114,9 @@ ffi.cdef([[
     const char* uv_strerror(int err);
 ]])
 
+---Return libuv error status as a formated Lua string
+---@param status number
+---@return string
 local function get_error(status)
     local name = ffi.string(libuv.uv_err_name(status))
     local err = ffi.string(libuv.uv_strerror(status))
@@ -240,7 +243,8 @@ end
 ---@param timeout number
 ---@param callback function
 function Timer:start(timeout, callback)
-    check(libuv.uv_timer_start(self, cast("uv_timer_cb", callback), timeout, 0))
+    local cb = cast("uv_timer_cb", function(handle) callback() end)
+    check(libuv.uv_timer_start(self, cb, timeout, 0))
 end
 
 ---Starts a recurring timer.
@@ -248,7 +252,8 @@ end
 ---@param interval number
 ---@param callback function
 function Timer:recurring(interval, callback)
-    check(libuv.uv_timer_start(self, cast("uv_timer_cb", callback), interval, interval))
+    local cb = cast("uv_timer_cb", function(handle) callback() end)
+    check(libuv.uv_timer_start(self, cb, interval, interval))
 end
 
 ---Stops a timer.
@@ -287,9 +292,13 @@ end
 ---Starts polling a file descriptor.
 ---@param self ffi.cdata*
 ---@param events number a member of the uv_poll_event enum
----@param callback function
+---@param callback fun(events:number) end
 function Poll:start(events, callback)
-    check(libuv.uv_poll_start(self, events, cast("uv_poll_cb", callback)))
+    local cb = cast("uv_poll_cb", function(handle, status, events)
+        check(status)
+        callback(tonumber(events))
+    end)
+    check(libuv.uv_poll_start(self, events, cb))
 end
 
 ---Stops polling a file descriptor.
@@ -307,10 +316,13 @@ ffi.cdef([[
 local Request = {}
 Request.__index = Request
 
+---Cancel a request
 function Request:cancel()
     check(libuv.uv_cancel(cast("uv_req_t*", self)))
 end
 
+---Return the request type as a string
+---@return string
 function Request:__tostring()
     local id = libuv.uv_req_get_type(cast("uv_req_t*", self))
     return ffi.string(libuv.uv_req_type_name(id))
@@ -353,6 +365,8 @@ local Stream = setmetatable({}, Handle)
 Stream.__index = Stream
 ffi.metatype(ffi.typeof("uv_stream_t"), Stream)
 
+---Shutdown and close a stream
+---@param callback function|nil
 function Stream:shutdown(callback)
     local req = cast("uv_shutdown_t*", C.malloc(ffi.sizeof("uv_shutdown_t")))
     local handle = cast("uv_stream_t*", self)
@@ -364,6 +378,9 @@ function Stream:shutdown(callback)
     check(libuv.uv_shutdown(req, handle, cb))
 end
 
+---Listen for a client to connect to a stream
+---@param backlog number
+---@param callback function
 function Stream:listen(backlog, callback)
     local stream = cast("uv_stream_t*", self)
     local cb = cast("uv_connection_cb", function(server, status)
@@ -373,12 +390,16 @@ function Stream:listen(backlog, callback)
     check(libuv.uv_listen(stream, backlog, cb))
 end
 
+---Accept a connecting client
+---@param client ffi.cdata*
 function Stream:accept(client)
     local server = cast("uv_stream_t*", self)
     local client = cast("uv_stream_t*", client)
     check(libuv.uv_accept(server, client))
 end
 
+---Start reading from a stream
+---@param callback fun(data:string|nil)
 function Stream:read_start(callback)
     local stream = cast("uv_stream_t*", self)
 
@@ -412,10 +433,14 @@ function Stream:read_start(callback)
     check(libuv.uv_read_start(stream, alloc_cb, read_cb))
 end
 
+---Stop reading from a stream
 function Stream:read_stop()
     check(libuv.uv_read_stop(cast("uv_stream_t*", self)))
 end
 
+---Write data to a stream
+---@param data string
+---@param callback function|nil
 function Stream:write(data, callback)
     local req = cast("uv_write_t*", C.malloc(ffi.sizeof("uv_write_t")))
     local handle = cast("uv_stream_t*", self)
