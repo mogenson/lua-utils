@@ -120,7 +120,7 @@ ffi.cdef([[
 local function get_error(status)
     local name = ffi.string(libuv.uv_err_name(status))
     local err = ffi.string(libuv.uv_strerror(status))
-    return string.format("%: %", name, err)
+    return string.format("%s: %s", name, err)
 end
 
 ---Checks the status of a libuv operation and throws an error if it's negative.
@@ -500,6 +500,44 @@ function Tcp:connect(host, port, callback)
         callback()
     end)
     check(libuv.uv_tcp_connect(req, self, addr, cb))
+end
+
+ffi.cdef([[
+    int uv_pipe_init(uv_loop_t *loop, uv_pipe_t *handle, int ipc);
+    int uv_pipe_bind(uv_pipe_t *handle, const char *name);
+    void uv_pipe_connect(uv_connect_t *req, uv_pipe_t *handle, const char *name, uv_connect_cb cb);
+]])
+
+local Pipe = setmetatable({}, Stream)
+Pipe.__index = Pipe
+ffi.metatype(ffi.typeof("uv_pipe_t"), Pipe)
+
+---Creates a new Pipe
+---@param ipc boolean|nil
+---@return ffi.cdata*
+function Loop:new_pipe(ipc)
+    local pipe = ffi.new("uv_pipe_t")
+    check(libuv.uv_pipe_init(self, pipe, ipc and 1 or 0))
+    return pipe
+end
+
+---Bind pipe to a local path
+---@param name string
+function Pipe:bind(name)
+    check(libuv.uv_pipe_bind(self, name))
+end
+
+---Connect pipe to a local path
+---@param name string
+---@param callback function
+function Pipe:connect(name, callback)
+    local req = cast("uv_connect_t*", C.malloc(ffi.sizeof("uv_connect_t")))
+    local cb = cast("uv_connect_cb", function(req, status)
+        C.free(req)
+        check(status)
+        callback()
+    end)
+    libuv.uv_pipe_connect(req, self, name, cb)
 end
 
 return libuv.uv_default_loop()
