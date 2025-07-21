@@ -1,3 +1,5 @@
+---@diagnostic disable inject-field
+---@diagnostic disable undefined-field
 local ffi = require("ffi")
 local cast = ffi.cast
 local C = ffi.C
@@ -296,7 +298,7 @@ end
 function Poll:start(events, callback)
     local cb = cast("uv_poll_cb", function(handle, status, events)
         check(status)
-        callback(tonumber(events))
+        callback(events)
     end)
     check(libuv.uv_poll_start(self, events, cb))
 end

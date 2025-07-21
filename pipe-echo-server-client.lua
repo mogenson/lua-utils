@@ -1,7 +1,7 @@
 local loop = require("libuv")
 
 local name = "/tmp/mike-pipe"
-os.execute("rm " .. name)
+os.execute("rm -f " .. name)
 
 -- server
 local server = loop:new_pipe()
