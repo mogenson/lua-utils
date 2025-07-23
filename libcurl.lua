@@ -151,13 +151,8 @@ function Multi:socket_function(handle, fd, action)
     self.timer:stop()
 
     --- This function is called by libuv when a socket is ready for reading or writing.
-    ---@param handle ffi.cdata*
-    ---@param status number
     ---@param events number
-    ---@diagnostic disable-next-line: redefined-local
-    local function perform(handle, status, events)
-        assert(status >= 0)
-
+    local function perform(events)
         local running_handles = ffi.new('int[1]')
         if events == uv.UV_READABLE then
             libcurl.curl_multi_socket_action(self.multi, fd, libcurl.CURL_CSELECT_IN, running_handles)
@@ -169,7 +164,7 @@ function Multi:socket_function(handle, fd, action)
         repeat
             msg = libcurl.curl_multi_info_read(self.multi, pending)
             if msg ~= nil and msg.msg == libcurl.CURLMSG_DONE then
-                libcurl.curl_multi_remove_handle(self.multi, handle)
+                libcurl.curl_multi_remove_handle(self.multi, msg.handle)
                 libcurl.curl_easy_cleanup(msg.handle)
                 local callback = (self.handles[address(msg.handle)] or {}).finished_callback
                 self.handles[address(msg.handle)] = nil
