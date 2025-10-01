@@ -199,7 +199,7 @@ ffi.metatype(ffi.typeof("uv_loop_t"), { __index = Loop, __tostring = Handle.__to
 ---@param self ffi.cdata*
 ---@return number
 function Loop:now()
-    return assert(tonumber(libuv.uv_loop_now(self)))
+    return assert(tonumber(libuv.uv_now(self)))
 end
 
 ---Updates the event loop's concept of "now".
