@@ -67,6 +67,7 @@ local type_encoding = setmetatable({
     ["^"] = "void*",
     ["?"] = "void",
     ["r*"] = "char*",
+    ["r^v"] = "const void*",
 }, {
     __index = function(_, k)
         assert(type(k) == "string" and #k > 2)
@@ -79,14 +80,14 @@ local type_encoding = setmetatable({
 })
 
 ---convert a NULL pointer to nil
----@param p cdata
+---@param p cdata pointer
 ---@return cdata | nil
 local function ptr(p)
     if p == nil then return nil else return p end
 end
 
 ---return a Class from name or object
----@param name string | Class
+---@param name string | Class | id
 ---@return Class
 local function cls(name)
     assert(name)
@@ -119,9 +120,9 @@ local function sel(name, num_args)
 end
 
 ---call a method for a SEL on a Class or object
----@param self string | Class | id
----@param selector string | SEL
----@param ...? any
+---@param self string | Class | id the class or object
+---@param selector string | SEL name of method
+---@param ...? any additional method parameters
 ---@return any
 local function msgSend(self, selector, ...)
     ---return Method for Class or object and SEL
@@ -129,7 +130,6 @@ local function msgSend(self, selector, ...)
     ---@param selector SEL
     ---@return Method?
     local function getMethod(self, selector) ---@diagnostic disable-line: redefined-local
-        -- return method for Class or object and SEL
         if ffi.istype("Class", self) then
             return assert(ptr(C.class_getClassMethod(self, selector)))
         elseif ffi.istype("id", self) then
@@ -145,24 +145,22 @@ local function msgSend(self, selector, ...)
     local function convert(lua_var, c_type)
         if type(lua_var) == "string" then
             if c_type == "SEL" then
-                -- print("creating SEL from " .. lua_var)
                 return sel(lua_var)
             elseif c_type == "char*" then
-                -- print("creating char* from " .. lua_var)
                 return ffi.cast(c_type, lua_var)
             end
         elseif type(lua_var) == "cdata" and c_type == "id" and ffi.istype("Class", lua_var) then
-            -- sometimes method signatures use id instead of Class
-            -- print("casting " .. tostring(lua_var) .. " to id")
-            return ffi.cast(c_type, lua_var)
+            return ffi.cast(c_type, lua_var) -- sometimes method signatures use id instead of Class
+        elseif lua_var == nil then
+            return ffi.new(c_type)           -- convert to a null pointer
         end
-        return lua_var -- no conversion necessary
+        return lua_var                       -- no conversion necessary
     end
 
     if type(self) == "string" then self = cls(self) end
     local selector = sel(selector) ---@diagnostic disable-line: redefined-local
     local method = getMethod(self, selector)
-    local call_args = { self, selector, ... }
+    local call_args = table.pack(self, selector, ...)
     local char_ptr = assert(ptr(C.method_copyReturnType(method)))
     local objc_type = ffi.string(char_ptr)
     C.free(char_ptr)
@@ -172,7 +170,7 @@ local function msgSend(self, selector, ...)
     table.insert(signature, "(*)(")
 
     local num_method_args = C.method_getNumberOfArguments(method)
-    assert(num_method_args == #call_args)
+    assert(num_method_args == call_args.n)
     for i = 1, num_method_args do
         char_ptr = assert(ptr(C.method_copyArgumentType(method, i - 1)))
         objc_type = ffi.string(char_ptr)
@@ -185,17 +183,20 @@ local function msgSend(self, selector, ...)
     table.insert(signature, ")")
     local signature = table.concat(signature) ---@diagnostic disable-line: redefined-local
 
-    -- print(self, selector, signature)
-    return ffi.cast(signature, C.objc_msgSend)(unpack(call_args))
+    return ptr(ffi.cast(signature, C.objc_msgSend)(unpack(call_args, 1, call_args.n)))
 end
 
 ---load a Framework
----@param framework string
+---@param framework string framework name without the '.framework' extension
 local function loadFramework(framework)
     -- on newer versions of MacOS this is a broken symbolic link, but dlopen() still succeeds
     assert(ffi.load(string.format("/System/Library/Frameworks/%s.framework/%s", framework, framework), true))
 end
 
+---create a new custom class from an optional base class
+---@param name string name of new class
+---@param super_class? string | Class parent class, or NSObject if omitted
+---@return Class
 local function newClass(name, super_class)
     assert(name and type(name) == "string")
     local super_class = cls(super_class or "NSObject") ---@diagnostic disable-line: redefined-local
@@ -204,6 +205,11 @@ local function newClass(name, super_class)
     return class
 end
 
+---add a method to a custom class
+---@param class string | Class class created with newClass()
+---@param selector string | SEL name of method
+---@types string Objective-C type encoded method arguments and return type
+---@func function lua callback function for method implementation
 local function addMethod(class, selector, types, func)
     assert(type(func) == "function")
     assert(type(types) == "string") -- and #types - 1 == debug.getinfo(func).nparams)
@@ -220,7 +226,6 @@ local function addMethod(class, selector, types, func)
     end
     table.insert(signature, ")")
     local signature = table.concat(signature) ---@diagnostic disable-line: redefined-local
-    -- print(class, selector, signature, types)
 
     local imp = ffi.cast("IMP", ffi.cast(signature, func))
     assert(C.class_addMethod(class, selector, imp, types) == 1)
@@ -252,6 +257,7 @@ ffi.metatype("struct objc_class", {
         return ffi.string(assert(ptr(C.class_getName(class))))
     end,
     __index = function(class, selector)
+        if selector == "addMethod" then return addMethod end
         return function(self, ...)
             assert(class == self)
             return msgSend(self, sel(selector, select("#", ...)), ...)
