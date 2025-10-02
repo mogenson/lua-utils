@@ -44,7 +44,6 @@ local PressResponse = objc.NSData:dataWithBytes_length(
     ffi.new("NSInteger", 3)
 )
 
-
 -- globals
 local App = {
     run = false,
@@ -53,6 +52,19 @@ local App = {
     peripheral = nil,
     characteristic = nil,
 }
+
+-- signal handler
+ffi.cdef([[
+typedef void (*sig_t) (int);
+sig_t signal(int sig, sig_t func);
+]])
+
+C.signal(2, function(signal)
+    print("got ctrl-c")
+    App.run = false
+end)
+
+-- core bluetooth methods
 
 local function didUpdateState(self, cmd, central)
     if (central.state == CBManagerStatePoweredOn) then
