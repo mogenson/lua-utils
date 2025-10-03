@@ -39,7 +39,6 @@ local function NSLog(str, ...)
 end
 
 -- constants
-local YES = BOOL(true)
 local NSDefaultRunLoopMode = NSString("kCFRunLoopDefaultMode")
 local CBManagerStatePoweredOn = NSInteger(5)
 local CBAdvertisementDataServiceDataKey = NSString("kCBAdvDataServiceData")
@@ -92,6 +91,14 @@ local Ble = {
     disconnect = a.wrap(function(self, central, peripheral, cb)
         self.disconnectCallback = cb
         central:cancelPeripheralConnection(peripheral)
+    end),
+
+    sleep = a.wrap(function(self, target, seconds, cb)
+        self.callback = cb
+        seconds = ffi.new("double", seconds)
+        local selector = objc.SEL("timerFireMethod:")
+        objc.NSTimer:scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(seconds, target, selector, nil,
+            BOOL(false))
     end)
 }
 
@@ -109,7 +116,7 @@ local function didDiscoverPeripheral(self, cmd, central, peripheral,
     local service_data = advertisement_data:objectForKey(CBAdvertisementDataServiceDataKey) -- NSDictionary<NSString *,id>
     if service_data then
         local data = service_data:objectForKey(ServiceDataUuid)                             -- NSDictionary<CBUUID *, NSData *>
-        if data and data:isEqualToData(ExpectedServiceData) == YES then
+        if data and data:isEqualToData(ExpectedServiceData) == BOOL(true) then
             NSLog("Discovered peripheral with service data: %@", data)
             central:stopScan()
             return Ble.callback(peripheral:retain())
@@ -171,17 +178,18 @@ local function didWriteValueForCharacteristic(self, cmd, peripheral, characteris
 end
 
 local function makeDelegate()
-    local delegate_class = objc.newClass("CentralManagerDelegate")
-    delegate_class:addMethod("centralManagerDidUpdateState:", "v@:@", didUpdateState)
-    delegate_class:addMethod("centralManager:didDiscoverPeripheral:advertisementData:RSSI:", "v@:@@@@",
+    local class = objc.newClass("CentralManagerDelegate")
+    class:addMethod("centralManagerDidUpdateState:", "v@:@", didUpdateState)
+    class:addMethod("centralManager:didDiscoverPeripheral:advertisementData:RSSI:", "v@:@@@@",
         didDiscoverPeripheral)
-    delegate_class:addMethod("centralManager:didConnectPeripheral:", "v@:@@", didConnectPeripheral)
-    delegate_class:addMethod("centralManager:didFailToConnectPeripheral:error:", "v@:@@@", didFailToConnectPeripheral)
-    delegate_class:addMethod("centralManager:didDisconnectPeripheral:error:", "v@:@@@", didDisconnectPeripheral)
-    delegate_class:addMethod("peripheral:didDiscoverServices:", "v@:@@", didDiscoverServices)
-    delegate_class:addMethod("peripheral:didDiscoverCharacteristicsForService:error:", "v@:@@@",
+    class:addMethod("centralManager:didConnectPeripheral:", "v@:@@", didConnectPeripheral)
+    class:addMethod("centralManager:didFailToConnectPeripheral:error:", "v@:@@@", didFailToConnectPeripheral)
+    class:addMethod("centralManager:didDisconnectPeripheral:error:", "v@:@@@", didDisconnectPeripheral)
+    class:addMethod("peripheral:didDiscoverServices:", "v@:@@", didDiscoverServices)
+    class:addMethod("peripheral:didDiscoverCharacteristicsForService:error:", "v@:@@@",
         didDiscoverCharacteristics)
-    delegate_class:addMethod("peripheral:didWriteValueForCharacteristic:error:", "v@:@@@", didWriteValueForCharacteristic)
+    class:addMethod("peripheral:didWriteValueForCharacteristic:error:", "v@:@@@", didWriteValueForCharacteristic)
+    class:addMethod("timerFireMethod:", "v@:@", function(self, cmd, timer) return Ble.callback() end)
     return objc.CentralManagerDelegate:alloc():init()
 end
 
@@ -194,6 +202,7 @@ local main = a.sync(function()
     assert(a.wait(Ble:connect(central, peripheral)))
     local service = assert(a.wait(Ble:discoverService(peripheral, CommandService)))
     local characteristic = assert(a.wait(Ble:discoverCharacteristic(peripheral, service, CommandCharacteristic)))
+    a.wait(Ble:sleep(delegate, 1.0)) -- wait for peripheral service discovery to finish
     assert(a.wait(Ble:write(peripheral, characteristic, PressCommand)))
     a.wait(Ble:disconnect(central, peripheral))
     Ble.run = false
@@ -203,6 +212,6 @@ main()()
 
 local run_loop = objc.NSRunLoop:currentRunLoop()
 local distant_future = objc.NSDate:distantFuture()
-while Ble.run == true and run_loop:runMode_beforeDate(NSDefaultRunLoopMode, distant_future) == YES do end
+while Ble.run == true and run_loop:runMode_beforeDate(NSDefaultRunLoopMode, distant_future) == BOOL(true) do end
 
 NSLog("Done")
