@@ -257,14 +257,12 @@ ffi.metatype("struct objc_class", {
         return ffi.string(assert(ptr(C.class_getName(class))))
     end,
     __index = function(class, selector)
-        if selector == "addMethod" then return addMethod end
         return function(self, ...)
             assert(class == self)
             return msgSend(self, sel(selector, select("#", ...)), ...)
         end
     end
 })
-
 
 ffi.metatype("struct objc_object", {
     __tostring = function(class)

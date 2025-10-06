@@ -179,17 +179,17 @@ end
 
 local function makeDelegate()
     local class = objc.newClass("CentralManagerDelegate")
-    class:addMethod("centralManagerDidUpdateState:", "v@:@", didUpdateState)
-    class:addMethod("centralManager:didDiscoverPeripheral:advertisementData:RSSI:", "v@:@@@@",
+    objc.addMethod(class, "centralManagerDidUpdateState:", "v@:@", didUpdateState)
+    objc.addMethod(class, "centralManager:didDiscoverPeripheral:advertisementData:RSSI:", "v@:@@@@",
         didDiscoverPeripheral)
-    class:addMethod("centralManager:didConnectPeripheral:", "v@:@@", didConnectPeripheral)
-    class:addMethod("centralManager:didFailToConnectPeripheral:error:", "v@:@@@", didFailToConnectPeripheral)
-    class:addMethod("centralManager:didDisconnectPeripheral:error:", "v@:@@@", didDisconnectPeripheral)
-    class:addMethod("peripheral:didDiscoverServices:", "v@:@@", didDiscoverServices)
-    class:addMethod("peripheral:didDiscoverCharacteristicsForService:error:", "v@:@@@",
+    objc.addMethod(class, "centralManager:didConnectPeripheral:", "v@:@@", didConnectPeripheral)
+    objc.addMethod(class, "centralManager:didFailToConnectPeripheral:error:", "v@:@@@", didFailToConnectPeripheral)
+    objc.addMethod(class, "centralManager:didDisconnectPeripheral:error:", "v@:@@@", didDisconnectPeripheral)
+    objc.addMethod(class, "peripheral:didDiscoverServices:", "v@:@@", didDiscoverServices)
+    objc.addMethod(class, "peripheral:didDiscoverCharacteristicsForService:error:", "v@:@@@",
         didDiscoverCharacteristics)
-    class:addMethod("peripheral:didWriteValueForCharacteristic:error:", "v@:@@@", didWriteValueForCharacteristic)
-    class:addMethod("timerFireMethod:", "v@:@", function(self, cmd, timer) return Ble.callback() end)
+    objc.addMethod(class, "peripheral:didWriteValueForCharacteristic:error:", "v@:@@@", didWriteValueForCharacteristic)
+    objc.addMethod(class, "timerFireMethod:", "v@:@", function(self, cmd, timer) return Ble.callback() end)
     return objc.CentralManagerDelegate:alloc():init()
 end
 

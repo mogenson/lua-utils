@@ -37,7 +37,7 @@ describe("libcurl", function()
             return a.wait_all(collector(q1), collector(q2))
         end)
 
-        local response1, response2 = nil, nil
+        local response1, response2 = "", ""
         main()(function(...) response1, response2 = ... end)
         loop:run()
 

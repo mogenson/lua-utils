@@ -25,7 +25,6 @@ describe("a", function()
 
         local putter = a.sync(function(queue)
             for i = 1, 10 do
-                -- print("queue put ", i)
                 queue:put(i)
             end
             queue:put(nil)
@@ -36,7 +35,6 @@ describe("a", function()
             local vals, val = {}, nil
             repeat
                 val = a.wait(queue:get())
-                -- print("queue get ", val)
                 table.insert(vals, val)
             until not val
             return vals
@@ -56,7 +54,6 @@ describe("a", function()
 
         local sender = a.sync(function(tx)
             for i = 1, 10 do
-                -- print("channel send ", i)
                 a.wait(tx:send(i))
             end
             a.wait(tx:send(nil))
@@ -67,7 +64,6 @@ describe("a", function()
             local vals, val = {}, nil
             while true do
                 val = a.wait(rx:recv())
-                -- print("channel recv ", val)
                 if val == nil then break end
                 table.insert(vals, val)
             end
@@ -89,7 +85,6 @@ describe("a", function()
 
         local sender = a.sync(function(tx)
             for i = 1, 10 do
-                -- print("channel send ", i)
                 a.wait(tx:send(i))
             end
             a.wait(tx:send(false))
@@ -100,7 +95,6 @@ describe("a", function()
             local vals, val = {}, nil
             repeat
                 val = a.wait(rx:recv())
-                -- print("channel recv ", val)
                 table.insert(vals, val or nil)
             until not val
             return vals
@@ -206,7 +200,7 @@ describe("a", function()
 
         assert.are.equal(nil, calledWith)
 
-        continue(42)
+        assert(continue)(42)
 
         assert.are.equal(42, calledWith)
     end)
@@ -233,10 +227,10 @@ describe("a", function()
 
         assert.are.same(nil, calledWith)
 
-        continueFoo(42)
+        assert(continueFoo)(42)
         assert.are.same(nil, calledWith)
 
-        continueBar(43)
+        assert(continueBar)(43)
         assert.are.same({ 42, 43 }, calledWith)
     end)
 
@@ -262,10 +256,10 @@ describe("a", function()
 
         assert.are.same(nil, calledWith)
 
-        continueBar(43)
+        assert(continueBar)(43)
         assert.are.same(nil, calledWith)
 
-        continueFoo(42)
+        assert(continueFoo)(42)
         assert.are.same({ 42, 43 }, calledWith)
     end)
 
@@ -291,7 +285,7 @@ describe("a", function()
 
         assert.are.same(nil, calledWith)
 
-        continueBar(43)
+        assert(continueBar)(43)
         assert.are.same({ nil, 43 }, calledWith)
     end)
 end)

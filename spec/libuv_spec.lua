@@ -96,7 +96,7 @@ describe("pipe", function()
         main()(function(...) result = ... end)
         loop:run()
 
-        assert.are.equal(count, result[2])
+        assert.are.equal(count, (result or {})[2])
     end)
 end)
 
@@ -170,6 +170,6 @@ describe("socket", function()
         main()(function(...) result = ... end)
         loop:run()
 
-        assert.are.equal(count, result[2])
+        assert.are.equal(count, (result or {})[2])
     end)
 end)
