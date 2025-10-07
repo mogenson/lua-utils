@@ -1,5 +1,7 @@
 #!/usr/bin/env luajit
 
+---@diagnostic disable unused-local
+
 local a = require("async")
 local objc = require("objc")
 objc.loadFramework("Foundation")
@@ -40,15 +42,33 @@ end
 
 -- constants
 local NSDefaultRunLoopMode = NSString("kCFRunLoopDefaultMode")
-local CBManagerStatePoweredOn = NSInteger(5)
+
+-- CoreBluetooth constants from https://github.com/brettchien/PyBLEWrapper/blob/master/pyble/osx/IOBluetooth.py
+local CBCentralManagerStateUnkown = NSInteger(0)
+local CBCentralManagerStateResetting = NSInteger(1)
+local CBCentralManagerStateUnsupported = NSInteger(2)
+local CBCentralManagerStateUnauthorized = NSInteger(3)
+local CBCentralManagerStatePoweredOff = NSInteger(4)
+local CBCentralManagerStatePoweredOn = NSInteger(5)
+
+local CBAdvertisementDataLocalNameKey = NSString("kCBAdvDataLocalName")
+local CBAdvertisementDataManufacturerDataKey = NSString("kCBAdvDataManufacturerData")
 local CBAdvertisementDataServiceDataKey = NSString("kCBAdvDataServiceData")
+local CBAdvertisementDataServiceUUIDsKey = NSString("kCBAdvDataServiceUUIDs")
+local CBAdvertisementDataOverflowServiceUUIDsKey = NSString("kCBAdvDataOverflowService")
+local CBAdvertisementDataTxPowerLevelKey = NSString("kCBAdvDataTxPowerLevel")
+local CBAdvertisementDataIsConnectable = NSString("kCBAdvDataIsConnectable")
+local CBAdvertisementDataSolicitedServiceUUIDsKey = NSString("kCBAdvDataSolicitedServiceUUIDs")
+
 local CBCharacteristicWriteWithResponse = NSInteger(0)
 local CBCharacteristicWriteWithoutResponse = NSInteger(1)
+
 local ServiceDataUuid = CBUUID("fd3d")
 local CommandService = CBUUID("cba20d00-224d-11e6-9fb8-0002a5d5c51b")
 local CommandCharacteristic = CBUUID("cba20002-224d-11e6-9fb8-0002a5d5c51b")
 local ResponseCharacteristic = CBUUID("cba20003-224d-11e6-9fb8-0002a5d5c51b")
 local ExpectedServiceData = NSData({ 0x48, 0x00, 0x64, 0x00 })
+local ExpectedMfgData = NSData({ 0x69, 0x09, 0xd6, 0x34, 0xc5, 0x46, 0x61, 0x50, 0x05, 0x0c })
 local PressCommand = NSData({ 0x57, 0x01, 0x00 })
 local PressResponse = NSData({ 0x01, 0xFF, 0x00 })
 
@@ -105,7 +125,7 @@ local Ble = {
 -- core bluetooth delegate methods
 
 local function didUpdateState(self, cmd, central)
-    if (central.state == CBManagerStatePoweredOn) then
+    if (central.state == CBCentralManagerStatePoweredOn) then
         NSLog("Central manager powered on")
         return Ble.callback(central:retain())
     end
@@ -113,11 +133,12 @@ end
 
 local function didDiscoverPeripheral(self, cmd, central, peripheral,
                                      advertisement_data, rssi)
-    local service_data = advertisement_data:objectForKey(CBAdvertisementDataServiceDataKey) -- NSDictionary<NSString *,id>
-    if service_data then
-        local data = service_data:objectForKey(ServiceDataUuid)                             -- NSDictionary<CBUUID *, NSData *>
-        if data and data:isEqualToData(ExpectedServiceData) == BOOL(true) then
-            NSLog("Discovered peripheral with service data: %@", data)
+    local service_data = advertisement_data:objectForKey(CBAdvertisementDataServiceDataKey)  -- NSDictionary<NSString *,id>
+    local mfg_data = advertisement_data:objectForKey(CBAdvertisementDataManufacturerDataKey) -- NSData*
+    if service_data and mfg_data then
+        local data = service_data:objectForKey(ServiceDataUuid)                              -- NSDictionary<CBUUID *, NSData *>
+        if data and data:isEqualToData(ExpectedServiceData) == BOOL(true) and mfg_data:isEqualToData(ExpectedMfgData) == BOOL(true) then
+            NSLog("Discovered peripheral with service data: %@ and manufacturer data %@", data, mfg_data)
             central:stopScan()
             return Ble.callback(peripheral:retain())
         end
@@ -195,15 +216,24 @@ end
 
 local main = a.sync(function()
     Ble.run = true
+
+    -- init and scan
     local delegate = makeDelegate()
     local central = assert(a.wait(Ble:init(delegate)))
     local peripheral = assert(a.wait(Ble:scan(central)))
     peripheral.delegate = delegate -- register for peripheral callbacks
+
+    -- connect and get characteristic
     assert(a.wait(Ble:connect(central, peripheral)))
     local service = assert(a.wait(Ble:discoverService(peripheral, CommandService)))
     local characteristic = assert(a.wait(Ble:discoverCharacteristic(peripheral, service, CommandCharacteristic)))
-    a.wait(Ble:sleep(delegate, 1.0)) -- wait for peripheral service discovery to finish
+
+    -- write command and wait
+    a.wait(Ble:sleep(delegate, 2.0)) -- wait for peripheral service discovery to finish
     assert(a.wait(Ble:write(peripheral, characteristic, PressCommand)))
+    a.wait(Ble:sleep(delegate, 1.0)) -- wait for command to process
+
+    -- disconnect and stop
     a.wait(Ble:disconnect(central, peripheral))
     Ble.run = false
 end)
