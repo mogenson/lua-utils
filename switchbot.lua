@@ -1,5 +1,3 @@
-#!/usr/bin/env luajit
-
 ---@diagnostic disable unused-local
 
 local a = require("async")
@@ -72,49 +70,179 @@ local ExpectedMfgData = NSData({ 0x69, 0x09, 0xd6, 0x34, 0xc5, 0x46, 0x61, 0x50,
 local PressCommand = NSData({ 0x57, 0x01, 0x00 })
 local PressResponse = NSData({ 0x01, 0xFF, 0x00 })
 
+local run = false -- main runloop flag
+
+-- core bluetooth delegate methods
+
+local function didUpdateState(cb)
+    return function(id, sel, central)
+        if (central.state == CBCentralManagerStatePoweredOn) then
+            NSLog("Central manager powered on")
+            return cb and cb(central:retain())
+        end
+    end
+end
+
+local function didDiscoverPeripheral(cb)
+    return function(id, sel, central, peripheral,
+                    advertisement_data, rssi)
+        local service_data = advertisement_data:objectForKey(CBAdvertisementDataServiceDataKey)  -- NSDictionary<NSString *,id>
+        local mfg_data = advertisement_data:objectForKey(CBAdvertisementDataManufacturerDataKey) -- NSData*
+        if service_data and mfg_data then
+            local data = service_data:objectForKey(ServiceDataUuid)                              -- NSDictionary<CBUUID *, NSData *>
+            if data and data:isEqualToData(ExpectedServiceData) == BOOL(true) and mfg_data:isEqualToData(ExpectedMfgData) == BOOL(true) then
+                NSLog("Discovered peripheral with service data: %@ and manufacturer data %@", data, mfg_data)
+                central:stopScan()
+                return cb and cb(peripheral:retain())
+            end
+        end
+    end
+end
+
+local function didConnectPeripheral(cb)
+    return function(id, sel, central, peripheral)
+        NSLog("Connected to peripheral: %@", peripheral.name)
+        return cb and cb(true)
+    end
+end
+
+local function didFailToConnectPeripheral(cb)
+    return function(id, sel, central, peripheral, error)
+        NSLog("Failed to connect to peripheral: %@", error)
+        return cb and cb(false)
+    end
+end
+
+local function didDisconnectPeripheral(cb)
+    return function(id, sel, central, peripheral, error)
+        if objc.ptr(error) then
+            NSLog("Error disconnecting from peripheral: %@", error)
+            return cb and cb(false)
+        else
+            NSLog("Disconnected from peripheral")
+            return cb and cb(true)
+        end
+        run = false -- stop run loop if no waiting callback
+    end
+end
+
+local function didDiscoverServices(cb)
+    return function(id, sel, peripheral, error)
+        if objc.ptr(error) then
+            NSLog("Error discovering services: %@", error)
+            return cb and cb(nil)
+        end
+
+        local service = peripheral.services:objectAtIndex(0)
+        NSLog("Discovered service: %@", service.UUID)
+        return cb and cb(service:retain())
+    end
+end
+
+local function didDiscoverCharacteristics(cb)
+    return function(id, sel, peripheral, service, error)
+        if objc.ptr(error) then
+            NSLog("Error discovering characteristics: %@", error)
+            return cb and cb(nil)
+        end
+
+        local characteristic = service.characteristics:objectAtIndex(0)
+        NSLog("Discovered characteristic %@", characteristic.UUID)
+        return cb and cb(characteristic:retain())
+    end
+end
+
+local function didWriteValueForCharacteristic(cb)
+    return function(id, sel, peripheral, characteristic, error)
+        if objc.ptr(error) then
+            NSLog("Write to characteristic: %@", error)
+            return cb and cb(false)
+        else
+            NSLog("Wrote to characteristic")
+            return cb and cb(true)
+        end
+    end
+end
+
+local function timerFired(cb)
+    return function(id, sel, timer)
+        return cb and cb()
+    end
+end
+
 -- async methods
 local Ble = {
-    run = false,
-    callback = nil,
-    disconnectCallback = nil,
+    makeDelegate = function(self)
+        local class = objc.newClass("CentralManagerDelegate")
+
+        self.init_cb = objc.addMethod(class, "centralManagerDidUpdateState:", "v@:@",
+            didUpdateState())
+
+        self.scan_cb = objc.addMethod(class, "centralManager:didDiscoverPeripheral:advertisementData:RSSI:", "v@:@@@@",
+            didDiscoverPeripheral())
+
+        self.connect_cb = objc.addMethod(class, "centralManager:didConnectPeripheral:", "v@:@@",
+            didConnectPeripheral())
+
+        self.connect_fail_cb = objc.addMethod(class, "centralManager:didFailToConnectPeripheral:error:", "v@:@@@",
+            didFailToConnectPeripheral())
+
+        self.disconnect_cb = objc.addMethod(class, "centralManager:didDisconnectPeripheral:error:", "v@:@@@",
+            didDisconnectPeripheral())
+
+        self.discover_svc_cb = objc.addMethod(class, "peripheral:didDiscoverServices:", "v@:@@",
+            didDiscoverServices())
+
+        self.discover_char_cb = objc.addMethod(class, "peripheral:didDiscoverCharacteristicsForService:error:", "v@:@@@",
+            didDiscoverCharacteristics())
+
+        self.write_cb = objc.addMethod(class, "peripheral:didWriteValueForCharacteristic:error:", "v@:@@@",
+            didWriteValueForCharacteristic())
+
+        self.timer_cb = objc.addMethod(class, "timerFireMethod:", "v@:@",
+            timerFired())
+
+        return objc.CentralManagerDelegate:alloc():init()
+    end,
 
     init = a.wrap(function(self, delegate, cb)
-        self.callback = cb
+        self.init_cb:set(didUpdateState(cb))
         objc.CBCentralManager:alloc():initWithDelegate_queue(delegate, nil)
     end),
 
     scan = a.wrap(function(self, central, cb)
-        self.callback = cb
+        self.scan_cb:set(didDiscoverPeripheral(cb))
         central:scanForPeripheralsWithServices_options(nil, nil)
     end),
 
     connect = a.wrap(function(self, central, peripheral, cb)
-        self.callback = cb
+        self.connect_cb:set(didConnectPeripheral(cb))
+        self.connect_fail_cb:set(didFailToConnectPeripheral(cb))
         central:connectPeripheral_options(peripheral, nil)
     end),
 
     discoverService = a.wrap(function(self, peripheral, uuid, cb)
-        self.callback = cb
+        self.discover_svc_cb:set(didDiscoverServices(cb))
         peripheral:discoverServices(objc.NSArray:arrayWithObject(uuid))
     end),
 
     discoverCharacteristic = a.wrap(function(self, peripheral, service, uuid, cb)
-        self.callback = cb
+        self.discover_char_cb:set(didDiscoverCharacteristics(cb))
         peripheral:discoverCharacteristics_forService(objc.NSArray:arrayWithObject(uuid), service)
     end),
 
     write = a.wrap(function(self, peripheral, characteristic, value, cb)
-        self.callback = cb
+        self.write_cb:set(didWriteValueForCharacteristic(cb))
         peripheral:writeValue_forCharacteristic_type(value, characteristic, CBCharacteristicWriteWithResponse)
     end),
 
     disconnect = a.wrap(function(self, central, peripheral, cb)
-        self.disconnectCallback = cb
+        self.disconnect_cb:set(didDisconnectPeripheral(cb))
         central:cancelPeripheralConnection(peripheral)
     end),
 
     sleep = a.wrap(function(self, target, seconds, cb)
-        self.callback = cb
+        self.timer_cb:set(timerFired(cb))
         seconds = ffi.new("double", seconds)
         local selector = objc.SEL("timerFireMethod:")
         objc.NSTimer:scheduledTimerWithTimeInterval_target_selector_userInfo_repeats(seconds, target, selector, nil,
@@ -122,103 +250,12 @@ local Ble = {
     end)
 }
 
--- core bluetooth delegate methods
-
-local function didUpdateState(self, cmd, central)
-    if (central.state == CBCentralManagerStatePoweredOn) then
-        NSLog("Central manager powered on")
-        return Ble.callback(central:retain())
-    end
-end
-
-local function didDiscoverPeripheral(self, cmd, central, peripheral,
-                                     advertisement_data, rssi)
-    local service_data = advertisement_data:objectForKey(CBAdvertisementDataServiceDataKey)  -- NSDictionary<NSString *,id>
-    local mfg_data = advertisement_data:objectForKey(CBAdvertisementDataManufacturerDataKey) -- NSData*
-    if service_data and mfg_data then
-        local data = service_data:objectForKey(ServiceDataUuid)                              -- NSDictionary<CBUUID *, NSData *>
-        if data and data:isEqualToData(ExpectedServiceData) == BOOL(true) and mfg_data:isEqualToData(ExpectedMfgData) == BOOL(true) then
-            NSLog("Discovered peripheral with service data: %@ and manufacturer data %@", data, mfg_data)
-            central:stopScan()
-            return Ble.callback(peripheral:retain())
-        end
-    end
-end
-
-local function didConnectPeripheral(self, cmd, central, peripheral)
-    NSLog("Connected to peripheral: %@", peripheral.name)
-    return Ble.callback(true)
-end
-
-local function didFailToConnectPeripheral(self, cmd, central, peripheral, error)
-    NSLog("Failed to connect to peripheral: %@", error)
-    return Ble.callback(false)
-end
-
-local function didDisconnectPeripheral(self, cmd, central, peripheral, error)
-    if objc.ptr(error) then
-        NSLog("Error disconnecting from peripheral: %@", error)
-        if Ble.disconnectCallback then return Ble.disconnectCallback(false) end
-    else
-        NSLog("Disconnected from peripheral")
-        if Ble.disconnectCallback then return Ble.disconnectCallback(true) end
-    end
-    Ble.run = false -- stop run loop if no waiting callback
-end
-
-local function didDiscoverServices(self, cmd, peripheral, error)
-    if objc.ptr(error) then
-        NSLog("Error discovering services: %@", error)
-        return Ble.callback(nil)
-    end
-
-    local service = peripheral.services:objectAtIndex(0)
-    NSLog("Discovered service: %@", service.UUID)
-    return Ble.callback(service:retain())
-end
-
-local function didDiscoverCharacteristics(self, cmd, peripheral, service, error)
-    if objc.ptr(error) then
-        NSLog("Error discovering characteristics: %@", error)
-        return Ble.callback(nil)
-    end
-
-    local characteristic = service.characteristics:objectAtIndex(0)
-    NSLog("Discovered characteristic %@", characteristic.UUID)
-    return Ble.callback(characteristic:retain())
-end
-
-local function didWriteValueForCharacteristic(self, cmd, peripheral, characteristic, error)
-    if objc.ptr(error) then
-        NSLog("Write to characteristic: %@", error)
-        return Ble.callback(false)
-    else
-        NSLog("Wrote to characteristic")
-        return Ble.callback(true)
-    end
-end
-
-local function makeDelegate()
-    local class = objc.newClass("CentralManagerDelegate")
-    objc.addMethod(class, "centralManagerDidUpdateState:", "v@:@", didUpdateState)
-    objc.addMethod(class, "centralManager:didDiscoverPeripheral:advertisementData:RSSI:", "v@:@@@@",
-        didDiscoverPeripheral)
-    objc.addMethod(class, "centralManager:didConnectPeripheral:", "v@:@@", didConnectPeripheral)
-    objc.addMethod(class, "centralManager:didFailToConnectPeripheral:error:", "v@:@@@", didFailToConnectPeripheral)
-    objc.addMethod(class, "centralManager:didDisconnectPeripheral:error:", "v@:@@@", didDisconnectPeripheral)
-    objc.addMethod(class, "peripheral:didDiscoverServices:", "v@:@@", didDiscoverServices)
-    objc.addMethod(class, "peripheral:didDiscoverCharacteristicsForService:error:", "v@:@@@",
-        didDiscoverCharacteristics)
-    objc.addMethod(class, "peripheral:didWriteValueForCharacteristic:error:", "v@:@@@", didWriteValueForCharacteristic)
-    objc.addMethod(class, "timerFireMethod:", "v@:@", function(self, cmd, timer) return Ble.callback() end)
-    return objc.CentralManagerDelegate:alloc():init()
-end
-
 local main = a.sync(function()
-    Ble.run = true
+    run = true
 
     -- init and scan
-    local delegate = makeDelegate()
+    local delegate = Ble:makeDelegate()
+
     local central = assert(a.wait(Ble:init(delegate)))
     local peripheral = assert(a.wait(Ble:scan(central)))
     peripheral.delegate = delegate -- register for peripheral callbacks
@@ -235,13 +272,13 @@ local main = a.sync(function()
 
     -- disconnect and stop
     a.wait(Ble:disconnect(central, peripheral))
-    Ble.run = false
+    run = false
 end)
 
 main()()
 
 local run_loop = objc.NSRunLoop:currentRunLoop()
 local distant_future = objc.NSDate:distantFuture()
-while Ble.run == true and run_loop:runMode_beforeDate(NSDefaultRunLoopMode, distant_future) == BOOL(true) do end
+while run == true and run_loop:runMode_beforeDate(NSDefaultRunLoopMode, distant_future) == BOOL(true) do end
 
 NSLog("Done")

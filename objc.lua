@@ -208,8 +208,9 @@ end
 ---add a method to a custom class
 ---@param class string | Class class created with newClass()
 ---@param selector string | SEL name of method
----@types string Objective-C type encoded method arguments and return type
----@func function lua callback function for method implementation
+---@param types string Objective-C type encoded method arguments and return type
+---@param func function lua callback function for method implementation
+---@return cdata ffi callback
 local function addMethod(class, selector, types, func)
     assert(type(func) == "function")
     assert(type(types) == "string") -- and #types - 1 == debug.getinfo(func).nparams)
@@ -229,6 +230,7 @@ local function addMethod(class, selector, types, func)
 
     local imp = ffi.cast("IMP", ffi.cast(signature, func))
     assert(C.class_addMethod(class, selector, imp, types) == 1)
+    return imp
 end
 
 
