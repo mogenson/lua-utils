@@ -34,11 +34,11 @@ describe("libcurl", function()
         end)
 
         local main = a.sync(function()
-            return a.wait_all(collector(q1), collector(q2))
+            return a.wait(a.gather({ collector(q1), collector(q2) }))
         end)
 
         local response1, response2 = "", ""
-        main()(function(...) response1, response2 = ... end)
+        a.run(main(), function(...) response1, response2 = ... end)
         loop:run()
 
         local expected = string.format('"url": "%s"\n}\n', url)

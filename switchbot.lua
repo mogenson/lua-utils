@@ -256,18 +256,18 @@ local main = a.sync(function()
     -- init and scan
     local delegate = Ble:makeDelegate()
 
-    local central = assert(a.wait(Ble:init(delegate)))
-    local peripheral = assert(a.wait(Ble:scan(central)))
+    local central = a.wait(Ble:init(delegate))
+    local peripheral = a.wait(Ble:scan(central))
     peripheral.delegate = delegate -- register for peripheral callbacks
 
     -- connect and get characteristic
-    assert(a.wait(Ble:connect(central, peripheral)))
-    local service = assert(a.wait(Ble:discoverService(peripheral, CommandService)))
-    local characteristic = assert(a.wait(Ble:discoverCharacteristic(peripheral, service, CommandCharacteristic)))
+    a.wait(Ble:connect(central, peripheral))
+    local service = a.wait(Ble:discoverService(peripheral, CommandService))
+    local characteristic = a.wait(Ble:discoverCharacteristic(peripheral, service, CommandCharacteristic))
 
     -- write command and wait
     a.wait(Ble:sleep(delegate, 2.0)) -- wait for peripheral service discovery to finish
-    assert(a.wait(Ble:write(peripheral, characteristic, PressCommand)))
+    a.wait(Ble:write(peripheral, characteristic, PressCommand))
     a.wait(Ble:sleep(delegate, 1.0)) -- wait for command to process
 
     -- disconnect and stop
@@ -275,7 +275,7 @@ local main = a.sync(function()
     run = false
 end)
 
-main()()
+a.run(main())
 
 local run_loop = objc.NSRunLoop:currentRunLoop()
 local distant_future = objc.NSDate:distantFuture()

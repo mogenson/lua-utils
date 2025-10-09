@@ -89,7 +89,7 @@ describe("pipe", function()
         os.execute(string.format("rm -f %s", name))
 
         local main = a.sync(function()
-            return a.wait_race(server(), client())
+            return a.wait(a.select({ server(), client() }))
         end)
 
         local result = nil
@@ -163,11 +163,11 @@ describe("socket", function()
         end)
 
         local main = a.sync(function()
-            return a.wait_race(server(), client())
+            return a.wait(a.select({ server(), client() }))
         end)
 
         local result = nil
-        main()(function(...) result = ... end)
+        a.run(main(), function(...) result = ... end)
         loop:run()
 
         assert.are.equal(count, (result or {})[2])
