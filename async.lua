@@ -1,7 +1,7 @@
----Converts a function into a future. This function can await other futures
----internally. The returned future is completed when this function finished.
----@param fn function A function that is not run until the future is polled
----@return function A future with a poll function that calls cb when finished
+---Converts a function into a task. This task can await other futures
+---internally. The returned task is a future that can be awaited.
+---@param fn function A function that is not run until the task is polled
+---@return function A task with a poll function that calls cb when finished
 local function async(fn)
     return function(...)
         local params = table.pack(...)
@@ -24,7 +24,7 @@ local function async(fn)
     end
 end
 
----Converts a function into a future that completes when a cb is called. The
+---Converts a function into a future that completes when cb is called. The
 ---function needs a callback as the last param and must call it to complete.
 ---@param fn function A function that registers a callback for a future event
 ---@return function A future that completes when the callback is called
