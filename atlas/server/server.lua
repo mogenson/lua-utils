@@ -66,7 +66,6 @@ local function on_connection(client, app)
             scope.client = { "127.0.0.1", 8000 }
             scope.server = { "127.0.0.1", 8000 }
 
-            -- TODO MIKE await me
             app(scope, receive, send)
 
             local wire_response = {
@@ -88,33 +87,6 @@ local function on_connection(client, app)
     end)
 end
 
--- Make the underlying TCP server.
---
--- This allows stubbing of the server in tests.
-function Server._make_tcp_server(self)
-    self._server = loop:new_tcp()
-end
-
--- Bind to host and port.
-function Server._bind(self, config)
-    self._server:bind(config.host, config.port)
-end
-
--- Make the listen callback.
-function Server._make_listen_callback(self)
-    return function()
-        local client = loop:new_tcp()
-        self._server:accept(client)
-
-        on_connection(client, self._app)
-    end
-end
-
--- Configure the server to listen for connections.
-function Server._listen(self)
-    self._server:listen(128, self:_make_listen_callback())
-end
-
 function Server.on_sigint(_)
     loop:stop()
 end
@@ -130,16 +102,17 @@ function Server._set_sigint(_)
 end
 
 -- Set up the server to handle requests.
---
--- Return 0 if setup is successful or 1 if it failed.
 function Server.set_up(self, config)
-    self:_make_tcp_server()
-
-    self:_bind(config)
+    self._server = loop:new_tcp()
+    self._server:bind(config.host, config.port)
 
     print("Listening for requests on http://" .. config.host .. ":" .. config.port)
 
-    self:_listen()
+    self._server:listen(128, function()
+        local client = loop:new_tcp()
+        self._server:accept(client)
+        on_connection(client, self._app)
+    end)
 
     self:_set_sigint()
 end
