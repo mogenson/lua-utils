@@ -4,26 +4,21 @@ local Server = require("atlas.server.server")
 local Application = require("atlas.application")
 local Route = require("atlas.route")
 local Response = require("atlas.response")
-local luv = luv or require("luv")
 
 local function home()
-    local uname = luv.os_uname()
-
-    local hello = "Hello from " .. uname.sysname .. " " .. uname.release
-    local mem = "Using " .. collectgarbage("count") .. " Kb"
-
-    local html = [[
+    local html = { [[
     <html>
     <head>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
     </head>
-    <body>]]
+    <body>]] }
 
-    for _, content in ipairs({ hello, mem }) do
-        html = html .. "<p>" .. content .. "</p>"
-    end
+    table.insert(html, "<p>Hello from " .. io.popen("uname"):read() .. "</p>")
+    table.insert(html, "<p>Using " .. collectgarbage("count") .. " Kb</p>")
 
-    return html .. "</body></html>"
+    table.insert(html, "</body></html>")
+
+    return table.concat(html)
 end
 
 local controllers = {
@@ -35,10 +30,7 @@ local routes = {
 }
 
 local app = Application(routes)
+local config = { host = "127.0.0.1", port = 8080 }
+local server = Server(app)
 
-coroutine.wrap(function()
-    local config = { host = "127.0.0.1", port = 8080 }
-    local server = Server(app)
-    local status = main.run(config, server, app)
-    os.exit(status)
-end)()
+if not main.run(config, server, app) then os.exit(-1) end

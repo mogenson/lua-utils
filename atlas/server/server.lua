@@ -1,5 +1,4 @@
-local luv = require("luv")
-
+local loop = require("libuv")
 local Parser = require("atlas.server.http_11_parser")
 local ParserErrors = require("atlas.server.parser_errors")
 local http_statuses = require("atlas.server.statuses")
@@ -19,12 +18,7 @@ setmetatable(Server, { __call = _init })
 local ASGI_VERSION = { version = "3.0", spec_version = "2.3" }
 
 local function on_connection(client, app)
-    client:read_start(function(err, data)
-        -- TODO: This will be replaced with a real implementation soon,
-        -- so don't worry about the coverage of it.
-        -- luacov: disable
-        assert(not err, err)
-
+    client:read_start(function(data)
         -- TODO: Pass along any request body data.
         local receive = function()
             return {
@@ -72,6 +66,7 @@ local function on_connection(client, app)
             scope.client = { "127.0.0.1", 8000 }
             scope.server = { "127.0.0.1", 8000 }
 
+            -- TODO MIKE await me
             app(scope, receive, send)
 
             local wire_response = {
@@ -86,11 +81,10 @@ local function on_connection(client, app)
             table.insert(wire_response, "\r\n")
             table.insert(wire_response, response.body)
 
-            client:write(wire_response)
+            client:write(table.concat(wire_response))
         else
             client:close()
         end
-        -- luacov: enable
     end)
 end
 
@@ -98,60 +92,31 @@ end
 --
 -- This allows stubbing of the server in tests.
 function Server._make_tcp_server(self)
-    local err
-    self._server, err = luv.new_tcp()
-    if err then
-        print("Failed to create a TCP server")
-        print(err)
-        return 1
-    end
-    return 0
+    self._server = loop:new_tcp()
 end
 
 -- Bind to host and port.
 function Server._bind(self, config)
-    local status, err = self._server:bind(config.host, config.port)
-    if status ~= 0 then
-        print("Failed to bind to host and port")
-        print(err)
-        return status
-    end
-    return 0
+    self._server:bind(config.host, config.port)
 end
 
 -- Make the listen callback.
 function Server._make_listen_callback(self)
-    return function(err)
-        -- TODO: This is a callback so how is this supposed to clean up properly
-        -- if there is an error?
-        assert(not err, err)
-        local client = luv.new_tcp()
-        local _, accept_err = self._server:accept(client)
-        assert(not accept_err, accept_err)
+    return function()
+        local client = loop:new_tcp()
+        self._server:accept(client)
 
-        -- Each client connection must be in a coroutine so it can yield back
-        -- to the main event loop if it has some blocking activity.
-        coroutine.wrap(function() on_connection(client, self._app) end)()
+        on_connection(client, self._app)
     end
 end
 
 -- Configure the server to listen for connections.
 function Server._listen(self)
-    local status, err = self._server:listen(128, self:_make_listen_callback())
-    if status ~= 0 then
-        print("Failed to listen to incoming connections")
-        print(err)
-        return status
-    end
-    return 0
+    self._server:listen(128, self:_make_listen_callback())
 end
 
 function Server.on_sigint(_)
-    -- TODO: wat. For some reason, the coroutine is not yieldable here.
-    -- That prevents the logger from working.
-    -- print("Shutting down")
-    -- TODO: better cleanup? close existing handlers?
-    os.exit(0)
+    loop:stop()
 end
 
 -- Set sigint handler.
@@ -161,42 +126,26 @@ end
 -- SIGINT doesn't respond unless it happens twice.
 -- This handler ensures that the clean up happens right away.
 function Server._set_sigint(_)
-    local signal, err = luv.new_signal()
-    if err then
-        print("Failed to set signal handler")
-        print(err)
-        return 1
-    end
-
-    luv.signal_start(signal, "sigint", Server.on_sigint)
-    return 0
+    -- MIKE TODO set signal handler
 end
 
 -- Set up the server to handle requests.
 --
 -- Return 0 if setup is successful or 1 if it failed.
 function Server.set_up(self, config)
-    local status
-    status = self:_make_tcp_server()
-    if status ~= 0 then return status end
+    self:_make_tcp_server()
 
-    status = self:_bind(config)
-    if status ~= 0 then return status end
+    self:_bind(config)
 
     print("Listening for requests on http://" .. config.host .. ":" .. config.port)
 
-    status = self:_listen()
-    if status ~= 0 then return status end
+    self:_listen()
 
-    status = self:_set_sigint()
-    if status ~= 0 then return status end
-
-    return status
+    self:_set_sigint()
 end
 
 -- Run the uv loop.
---
--- The loop status of whether there are still active handles or requests is returned.
-function Server.run(_) return luv.run() end
+---@return boolean true if there are no active handles on stop
+function Server.run() return loop:run() == 0 end
 
 return Server

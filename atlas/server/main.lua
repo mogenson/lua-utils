@@ -23,12 +23,9 @@ local function run(config, server, app)
     if app == nil then app = load_app(config) end
     if server == nil then server = Server(app) end
 
-    local status = server:set_up(config)
-    if status ~= 0 then return status end
+    server:set_up(config)
 
-    local has_active_handles = server:run()
-    if has_active_handles then status = 1 end
-    return status
+    return server:run()
 end
 
 return { run = run }
