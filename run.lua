@@ -15,7 +15,7 @@ local function home()
     local html = [[
     <html>
     <head>
-    <link rel=stylesheet href=https://cdn.simplecss.org/simple.min.css>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
     </head>
     <body>]]
 
