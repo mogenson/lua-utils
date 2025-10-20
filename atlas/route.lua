@@ -11,7 +11,7 @@ local CONVERTER_PATTERNS = {
     string = "([^/]*)",
     int = "([%d]*)",
 }
-local CONVERTER_TRANSFORMS = { int = math.tointeger }
+local CONVERTER_TRANSFORMS = { int = math.floor }
 
 -- Make a pattern that matches the path template.
 --
