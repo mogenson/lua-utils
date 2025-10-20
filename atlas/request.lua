@@ -7,14 +7,14 @@ Request.__index = Request
 --
 -- scope: An ASGI scope with connection information
 local function _init(_, scope)
-  local self = setmetatable({}, Request)
-  self.scope = scope
+    local self = setmetatable({}, Request)
+    self.scope = scope
 
-  -- Scope proxy attributes
-  self.path = self.scope.path
+    -- Scope proxy attributes
+    self.path = self.scope.path
 
-  return self
+    return self
 end
-setmetatable(Request, {__call = _init})
+setmetatable(Request, { __call = _init })
 
 return Request

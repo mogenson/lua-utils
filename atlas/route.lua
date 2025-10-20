@@ -7,11 +7,11 @@ local FULL, NONE, PARTIAL = Match.FULL, Match.NONE, Match.PARTIAL
 local PARAMETER_PATTERN = "{([a-zA-Z_][a-zA-Z0-9_]*)(:[a-zA-Z_][a-zA-Z0-9_]*)}"
 
 local CONVERTER_PATTERNS = {
-  -- string should include any character except a slash.
-  string = "([^/]*)",
-  int = "([%d]*)",
+    -- string should include any character except a slash.
+    string = "([^/]*)",
+    int = "([%d]*)",
 }
-local CONVERTER_TRANSFORMS = {int = math.tointeger}
+local CONVERTER_TRANSFORMS = { int = math.tointeger }
 
 -- Make a pattern that matches the path template.
 --
@@ -19,38 +19,38 @@ local CONVERTER_TRANSFORMS = {int = math.tointeger}
 --
 -- path: A path template
 local function make_path_matcher(path)
-  assert(stringx.startswith(path, "/"), "A route path must start with a slash `/`.")
+    assert(stringx.startswith(path, "/"), "A route path must start with a slash `/`.")
 
-  -- Capture which converters are used. There will be one converter for each parameter.
-  local converters = {}
+    -- Capture which converters are used. There will be one converter for each parameter.
+    local converters = {}
 
-  local pattern = "^"
-  local index, path_length = 1, string.len(path)
-  local parameter_start, parameter_end
-  while index <= path_length do
-    parameter_start, parameter_end = string.find(path, PARAMETER_PATTERN, index)
-    if parameter_start then
-      -- Include any literal characters before the parameter.
-      pattern = pattern .. string.sub(path, index, parameter_start - 1)
+    local pattern = "^"
+    local index, path_length = 1, string.len(path)
+    local parameter_start, parameter_end
+    while index <= path_length do
+        parameter_start, parameter_end = string.find(path, PARAMETER_PATTERN, index)
+        if parameter_start then
+            -- Include any literal characters before the parameter.
+            pattern = pattern .. string.sub(path, index, parameter_start - 1)
 
-      local _, converter = string.match(path, PARAMETER_PATTERN, parameter_start)
-      local converter_type = string.sub(converter, 2) -- strip off the colon
+            local _, converter = string.match(path, PARAMETER_PATTERN, parameter_start)
+            local converter_type = string.sub(converter, 2) -- strip off the colon
 
-      local converter_pattern = CONVERTER_PATTERNS[converter_type]
-      if not converter_pattern then
-        error("Unknown converter type: " .. converter_type)
-      end
+            local converter_pattern = CONVERTER_PATTERNS[converter_type]
+            if not converter_pattern then
+                error("Unknown converter type: " .. converter_type)
+            end
 
-      pattern = pattern .. converter_pattern
-      table.insert(converters, converter_type)
-      index = parameter_end + 1
-    else
-      -- No parameters. Capture any remaining portion.
-      pattern = pattern .. string.sub(path, index)
-      break
+            pattern = pattern .. converter_pattern
+            table.insert(converters, converter_type)
+            index = parameter_end + 1
+        else
+            -- No parameters. Capture any remaining portion.
+            pattern = pattern .. string.sub(path, index)
+            break
+        end
     end
-  end
-  return pattern .. "$", converters
+    return pattern .. "$", converters
 end
 
 local Route = {}
@@ -64,21 +64,21 @@ Route.__index = Route
 -- controller: A controller function
 --    methods: A table of methods that the controller can handle (default: {"GET"})
 local function _init(_, path, controller, methods)
-  local self = setmetatable({}, Route)
+    local self = setmetatable({}, Route)
 
-  self.path = path
-  self.path_pattern, self.converters = make_path_matcher(path)
-  self.controller = controller
+    self.path = path
+    self.path_pattern, self.converters = make_path_matcher(path)
+    self.controller = controller
 
-  if not methods then
-    self.methods = {"GET"}
-  else
-    self.methods = methods
-  end
+    if not methods then
+        self.methods = { "GET" }
+    else
+        self.methods = methods
+    end
 
-  return self
+    return self
 end
-setmetatable(Route, {__call = _init})
+setmetatable(Route, { __call = _init })
 
 -- Check if the route matches the method and path.
 --
@@ -90,13 +90,13 @@ setmetatable(Route, {__call = _init})
 -- method: An HTTP method, uppercased
 --   path: An HTTP request path
 function Route.matches(self, method, path)
-  if not string.match(path, self.path_pattern) then return NONE end
+    if not string.match(path, self.path_pattern) then return NONE end
 
-  for _, allowed_method in ipairs(self.methods) do
-    if method == allowed_method then return FULL end
-  end
+    for _, allowed_method in ipairs(self.methods) do
+        if method == allowed_method then return FULL end
+    end
 
-  return PARTIAL
+    return PARTIAL
 end
 
 -- Route a request to a controller.
@@ -105,20 +105,20 @@ end
 --
 -- request: An HTTP request object
 function Route.run(self, request)
-  local raw_parameters = table.pack(string.match(request.path, self.path_pattern))
+    local raw_parameters = table.pack(string.match(request.path, self.path_pattern))
 
-  local transformer
-  local parameters = {}
-  for i, converter_type in ipairs(self.converters) do
-    transformer = CONVERTER_TRANSFORMS[converter_type]
-    if transformer then
-      table.insert(parameters, transformer(raw_parameters[i]))
-    else
-      table.insert(parameters, raw_parameters[i])
+    local transformer
+    local parameters = {}
+    for i, converter_type in ipairs(self.converters) do
+        transformer = CONVERTER_TRANSFORMS[converter_type]
+        if transformer then
+            table.insert(parameters, transformer(raw_parameters[i]))
+        else
+            table.insert(parameters, raw_parameters[i])
+        end
     end
-  end
 
-  return self.controller(request, table.unpack(parameters))
+    return self.controller(request, table.unpack(parameters))
 end
 
 return Route
