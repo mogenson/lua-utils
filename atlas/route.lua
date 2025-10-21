@@ -69,12 +69,7 @@ local function _init(_, path, controller, methods)
     self.path = path
     self.path_pattern, self.converters = make_path_matcher(path)
     self.controller = controller
-
-    if not methods then
-        self.methods = { "GET" }
-    else
-        self.methods = methods
-    end
+    self.methods = methods or { "GET" }
 
     return self
 end

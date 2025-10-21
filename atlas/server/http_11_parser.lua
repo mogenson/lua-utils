@@ -31,14 +31,15 @@ local SUPPORTED_METHODS = { "GET", "POST", "HEAD", "DELETE", "PUT", "PATCH" }
 -- These are the versions supported by ASGI HTTP 2.3.
 local SUPPORTED_VERSIONS = { "1.0", "1.1", "2" }
 
--- An HTTP 1.1 parser
---
--- This parser focuses on HTTP *request* parsing.
-local function _init(_)
-    local self = setmetatable({}, Parser)
-    return self
-end
-setmetatable(Parser, { __call = _init })
+setmetatable(Parser, {
+    -- An HTTP 1.1 parser
+    --
+    -- This parser focuses on HTTP *request* parsing.
+    __call = function(_)
+        -- TODO MIKE hold state and allow calling multiple times with more data until parse is complete
+        return setmetatable({}, Parser)
+    end
+})
 
 -- Parse the request data.
 --
@@ -48,7 +49,7 @@ setmetatable(Parser, { __call = _init })
 -- meta: The non-body portion of the request (a strict subset of an ASGI scope)
 -- body: The body data
 --  err: Non-nil if an error exists
-function Parser.parse(_, data) -- self, data
+function Parser:parse(data) -- self, data
     local meta = { type = "http" }
     local method, target, version = string.match(data, REQUEST_LINE_PATTERN)
     if not method then return nil, nil, ParserErrors.INVALID_REQUEST_LINE end

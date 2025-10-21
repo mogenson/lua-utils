@@ -10,13 +10,13 @@ local sleep = a.wrap(function(ms, cb)
     loop:new_timer():start(ms, cb)
 end)
 
-local function home()
+local function home(request)
     local html = { [[
-    <html>
-    <head>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
-    </head>
-    <body>]] }
+<html>
+<head>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
+</head>
+<body>]] }
 
     print("before sleep")
     table.insert(html, "<p>LibUV time before sleep: " .. loop:now() .. "</p>")
@@ -28,21 +28,13 @@ local function home()
 
     table.insert(html, "<p>Using " .. collectgarbage("count") .. " Kb</p>")
 
-    table.insert(html, "</body></html>")
+    table.insert(html, "</body>\r\n</html>")
 
-    return table.concat(html)
+    return Response(table.concat(html, "\r\n"))
 end
 
-local controllers = {
-    home = function(request) return Response(home()) end
-}
+local controllers = { home = home }
+local routes = { Route("/", controllers.home) }
+local config = { app = Application(routes), host = "127.0.0.1", port = 8080 }
 
-local routes = {
-    Route("/", controllers.home)
-}
-
-local app = Application(routes)
-local config = { host = "127.0.0.1", port = 8080 }
-local server = Server(app)
-
-if not main.run(config, server, app) then os.exit(-1) end
+os.exit(main.run(config) and 0 or -1)

@@ -7,14 +7,14 @@ local http_statuses = require("atlas.server.statuses")
 local Server = {}
 Server.__index = Server
 
-local function _init(_, app)
-    local self = setmetatable({}, Server)
-    self._server = nil
-    self._app = app
-
-    return self
-end
-setmetatable(Server, { __call = _init })
+setmetatable(Server, {
+    __call = function(_, app)
+        return setmetatable({
+            app = app,
+            server = nil
+        }, Server)
+    end
+})
 
 local ASGI_VERSION = { version = "3.0", spec_version = "2.3" }
 
@@ -114,15 +114,15 @@ end
 
 -- Set up the server to handle requests.
 function Server.set_up(self, config)
-    self._server = loop:new_tcp()
-    self._server:bind(config.host, config.port)
+    self.server = loop:new_tcp()
+    self.server:bind(config.host, config.port)
 
     print("Listening for requests on http://" .. config.host .. ":" .. config.port)
 
-    self._server:listen(1, function()
+    self.server:listen(1, function()
         local client = loop:new_tcp()
-        self._server:accept(client)
-        a.run(on_connection(client, self._app))
+        self.server:accept(client)
+        a.run(on_connection(client, self.app))
     end)
 
     self:_set_sigint()

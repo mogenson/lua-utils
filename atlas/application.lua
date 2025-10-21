@@ -9,11 +9,11 @@ local FULL, PARTIAL = Match.FULL, Match.PARTIAL
 local Application = {}
 Application.__index = Application
 
-local function _init(_, routes)
-    local self = setmetatable({}, Application)
-    self.router = Router(routes)
-    return self
-end
+setmetatable(Application, {
+    __call = function(_, routes)
+        return setmetatable({ router = Router(routes) }, Application)
+    end
+})
 
 -- Act as a LASGI callable interface.
 Application.__call = a.sync(function(self, scope, receive, send)
@@ -24,8 +24,7 @@ Application.__call = a.sync(function(self, scope, receive, send)
     local response = Response("Not Found", "text/html", 404)
     local match, route = self.router:route(scope.method, scope.path)
     if match == FULL then
-        local request = Request(scope)
-        response = route:run(request)
+        response = route:run(Request(scope))
     elseif match == PARTIAL then
         response = Response("Method Not Allowed", "text/html", 405)
     end
@@ -33,6 +32,5 @@ Application.__call = a.sync(function(self, scope, receive, send)
     response(send)
 end)
 
-setmetatable(Application, { __call = _init })
 
 return Application
