@@ -118,7 +118,7 @@ describe("socket", function()
         local read = a.wrap(function(socket, cb)
             socket:read_start(function(data)
                 socket:read_stop()
-                return cb(data or false)
+                return cb(data)
             end)
         end)
 

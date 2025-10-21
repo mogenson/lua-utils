@@ -1,3 +1,4 @@
+local a = require("async")
 local Match = require("atlas.match")
 local Request = require("atlas.request")
 local Response = require("atlas.response")
@@ -15,7 +16,8 @@ local function _init(_, routes)
 end
 
 -- Act as a LASGI callable interface.
-function Application.__call(self, scope, receive, send)
+Application.__call = a.sync(function(self, scope, receive, send)
+    print("app _call")
     -- TODO: When is this supposed to be called?
     -- What happens on a request with no body?
     local _ = receive() -- event
@@ -30,7 +32,7 @@ function Application.__call(self, scope, receive, send)
     end
 
     response(send)
-end
+end)
 
 setmetatable(Application, { __call = _init })
 
