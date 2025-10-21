@@ -17,7 +17,6 @@ end
 
 -- Act as a LASGI callable interface.
 Application.__call = a.sync(function(self, scope, receive, send)
-    print("app _call")
     -- TODO: When is this supposed to be called?
     -- What happens on a request with no body?
     local _ = receive() -- event

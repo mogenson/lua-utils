@@ -1,9 +1,14 @@
+local a = require("async")
+local loop = require("libuv")
 local main = require("atlas.server.main")
-
 local Server = require("atlas.server.server")
 local Application = require("atlas.application")
 local Route = require("atlas.route")
 local Response = require("atlas.response")
+
+local sleep = a.wrap(function(ms, cb)
+    loop:new_timer():start(ms, cb)
+end)
 
 local function home()
     local html = { [[
@@ -13,7 +18,14 @@ local function home()
     </head>
     <body>]] }
 
-    table.insert(html, "<p>Hello from " .. io.popen("uname"):read() .. "</p>")
+    print("before sleep")
+    table.insert(html, "<p>LibUV time before sleep: " .. loop:now() .. "</p>")
+
+    a.wait(sleep(1000))
+
+    table.insert(html, "<p>LibUV time after sleep: " .. loop:now() .. "</p>")
+    print("after sleep")
+
     table.insert(html, "<p>Using " .. collectgarbage("count") .. " Kb</p>")
 
     table.insert(html, "</body></html>")

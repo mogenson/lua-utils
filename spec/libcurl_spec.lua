@@ -30,6 +30,7 @@ describe("libcurl", function()
                 val = a.wait(q:get())
                 table.insert(vals, val)
             until not val
+            print() -- force jit off
             return table.concat(vals)
         end)
 

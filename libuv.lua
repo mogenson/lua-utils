@@ -250,7 +250,7 @@ function Timer:start(timeout, callback)
     local cb = nil
     cb = ffi.cast("uv_timer_cb", function(handle)
         cb:free()
-        return callback()
+        return callback and callback()
     end)
     check(libuv.uv_timer_start(self, cb, timeout, 0))
 end
@@ -260,7 +260,7 @@ end
 ---@param interval number
 ---@param callback function
 function Timer:recurring(interval, callback)
-    local function timer_cb(handle) return callback() end
+    local function timer_cb(handle) return callback and callback() end
 
     local cache = self:get_cache()
     if not cache then cache = self:make_cache() end
@@ -318,7 +318,7 @@ end
 function Poll:start(events, callback)
     local function poll_cb(handle, status, events)
         check(status)
-        return callback(events)
+        return callback and callback(events)
     end
 
     local cache = self:get_cache()
@@ -413,7 +413,7 @@ function Stream:shutdown(callback)
         cb:free()
         ffi.C.free(req)
         check(status)
-        if callback then return callback() end
+        return callback and callback()
     end)
     check(libuv.uv_shutdown(req, handle, cb))
 end
@@ -422,14 +422,21 @@ end
 ---@param backlog number
 ---@param callback function
 function Stream:listen(backlog, callback)
-    local stream = ffi.cast("uv_stream_t*", self)
-    local cb = nil
-    cb = ffi.cast("uv_connection_cb", function(server, status)
-        cb:free()
+    local function connection_cb(server, status)
         check(status)
-        return callback()
-    end)
-    check(libuv.uv_listen(stream, backlog, cb))
+        return callback and callback()
+    end
+
+    local cache = self:get_cache()
+    if not cache then cache = self:make_cache() end
+    if cache.connection_cb == nil then
+        cache.connection_cb = ffi.cast("uv_connection_cb", connection_cb)
+    else
+        cache.connection_cb:set(connection_cb)
+    end
+
+    local stream = ffi.cast("uv_stream_t*", self)
+    check(libuv.uv_listen(stream, backlog, cache.connection_cb))
 end
 
 ---Accept a connecting client
@@ -449,10 +456,10 @@ function Stream:read_start(callback)
         if nread == 0 then
             return
         elseif nread == libuv.UV_EOF then
-            return callback(nil)
+            return callback and callback(nil)
         else
             check(nread) -- shoud be > 0
-            return callback(ffi.string(buf.base, nread))
+            return callback and callback(ffi.string(buf.base, nread))
         end
     end
 
@@ -492,7 +499,7 @@ function Stream:write(data, callback)
         cb:free()
         ffi.C.free(req)
         check(status)
-        if callback then return callback() end
+        return callback and callback()
     end)
     check(libuv.uv_write(req, handle, bufs, nbufs, cb))
 end
@@ -539,7 +546,7 @@ function Tcp:connect(host, port, callback)
         cb:free()
         ffi.C.free(req)
         check(status)
-        return callback()
+        return callback and callback()
     end)
     check(libuv.uv_tcp_connect(req, self, addr, cb))
 end
@@ -578,7 +585,7 @@ function Pipe:connect(name, callback)
         cb:free()
         ffi.C.free(req)
         check(status)
-        return callback()
+        return callback and callback()
     end)
     libuv.uv_pipe_connect(req, self, name, cb)
 end
@@ -586,6 +593,7 @@ end
 ffi.cdef([[
     typedef struct cache_t {
         uv_buf_t read_buf;
+        uv_connection_cb connection_cb;
         uv_poll_cb poll_cb;
         uv_read_cb read_cb;
         uv_timer_cb timer_cb;
@@ -618,6 +626,7 @@ function Handle:free_cache()
     local cache = self:get_cache()
     if not cache then return end
     if cache.read_buf.base ~= nil then ffi.C.free(cache.read_buf.base) end
+    if cache.connection_cb ~= nil then cache.connection_cb:free() end
     if cache.poll_cb ~= nil then cache.poll_cb:free() end
     if cache.read_cb ~= nil then cache.read_cb:free() end
     if cache.timer_cb ~= nil then cache.timer_cb:free() end
