@@ -239,7 +239,7 @@ ffi.metatype(ffi.typeof("uv_timer_t"), { __index = Timer, __tostring = Handle.__
 ---Creates a new timer.
 ---@param self ffi.cdata*
 ---@return ffi.cdata*
-function Loop:new_timer()
+function Loop:timer()
     local timer = ffi.new("uv_timer_t")
     check(libuv.uv_timer_init(self, timer))
     return timer
@@ -296,7 +296,7 @@ ffi.metatype(ffi.typeof("uv_poll_t"), { __index = Poll, __tostring = Handle.__to
 ---@param self ffi.cdata*
 ---@param fd number
 ---@return ffi.cdata*
-function Loop:new_poll(fd)
+function Loop:poll(fd)
     local poll = ffi.new("uv_poll_t")
     check(libuv.uv_poll_init(self, poll, fd))
     return poll
@@ -336,7 +336,7 @@ ffi.metatype(ffi.typeof("uv_signal_t"), { __index = Signal, __tostring = Handle.
 ---Creates a new signal.
 ---@param self ffi.cdata*
 ---@return ffi.cdata*
-function Loop:new_signal()
+function Loop:signal()
     local signal = ffi.new("uv_signal_t")
     check(libuv.uv_signal_init(self, signal))
     return signal
@@ -512,7 +512,7 @@ ffi.metatype(ffi.typeof("uv_tcp_t"), { __index = Tcp, __tostring = Handle.__tost
 ---Creates a new Tcp socket
 ---@param self ffi.cdata*
 ---@return ffi.cdata*
-function Loop:new_tcp()
+function Loop:tcp()
     local tcp = ffi.new("uv_tcp_t")
     check(libuv.uv_tcp_init(self, tcp))
     return tcp
@@ -557,7 +557,7 @@ ffi.metatype(ffi.typeof("uv_pipe_t"), { __index = Pipe, __tostring = Handle.__to
 ---Creates a new Pipe
 ---@param ipc boolean|nil
 ---@return ffi.cdata*
-function Loop:new_pipe(ipc)
+function Loop:pipe(ipc)
     local pipe = ffi.new("uv_pipe_t")
     check(libuv.uv_pipe_init(self, pipe, ipc and 1 or 0))
     return pipe

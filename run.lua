@@ -7,7 +7,7 @@ local Route = require("atlas.route")
 local Response = require("atlas.response")
 
 local sleep = a.wrap(function(ms, cb)
-    loop:new_timer():start(ms, cb)
+    loop:timer():start(ms, cb)
 end)
 
 local function home(request)

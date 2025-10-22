@@ -4,12 +4,12 @@ local host = "127.0.0.1"
 local port = 8000
 
 -- server
-local server = loop:new_tcp()
+local server = loop:tcp()
 server:bind(host, port)
 print("server listening")
 server:listen(16, function()
     print("new client connected")
-    local client = loop:new_tcp()
+    local client = loop:tcp()
     server:accept(client)
     client:read_start(function(data)
         print("server received: ", data)
@@ -22,7 +22,7 @@ server:listen(16, function()
 end)
 
 -- client
-local client = loop:new_tcp()
+local client = loop:tcp()
 client:connect(host, port, function()
     client:read_start(function(data)
         print("client received: ", data)

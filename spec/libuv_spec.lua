@@ -4,7 +4,7 @@ local loop = require("libuv")
 describe("timer", function()
     it("sleep", function()
         local sleep = a.wrap(function(ms, cb)
-            loop:new_timer():start(ms, function() cb(ms) end)
+            loop:timer():start(ms, function() cb(ms) end)
         end)
 
         local result = nil
@@ -47,10 +47,10 @@ describe("pipe", function()
         end)
 
         local server = a.sync(function()
-            local server_pipe = loop:new_pipe()
+            local server_pipe = loop:pipe()
             server_pipe:bind(name)
             a.wait(listen(server_pipe, 1))
-            local echo_pipe = loop:new_pipe()
+            local echo_pipe = loop:pipe()
             server_pipe:accept(echo_pipe)
 
             while true do
@@ -66,7 +66,7 @@ describe("pipe", function()
         end)
 
         local client = a.sync(function()
-            local client_pipe = loop:new_pipe()
+            local client_pipe = loop:pipe()
             a.wait(connect(client_pipe, name))
 
             local number = 1
@@ -123,10 +123,10 @@ describe("socket", function()
         end)
 
         local server = a.sync(function()
-            local server_socket = loop:new_tcp()
+            local server_socket = loop:tcp()
             server_socket:bind(host, port)
             a.wait(listen(server_socket, 1))
-            local echo_socket = loop:new_tcp()
+            local echo_socket = loop:tcp()
             server_socket:accept(echo_socket)
 
             while true do
@@ -142,7 +142,7 @@ describe("socket", function()
         end)
 
         local client = a.sync(function()
-            local client_socket = loop:new_tcp()
+            local client_socket = loop:tcp()
             a.wait(connect(client_socket, host, port))
 
             local number = 1

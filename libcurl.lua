@@ -100,7 +100,7 @@ local Multi = {
     multi = libcurl.curl_multi_init(),
     polls = {},
     handles = {},
-    timer = uv:new_timer(),
+    timer = uv:timer(),
 }
 
 --- Adds a new network request to the curl multi instance.
@@ -177,7 +177,7 @@ function Multi:socket_function(handle, fd, action)
 
     local poll = self.polls[fd]
     if not poll then
-        poll = uv:new_poll(fd)
+        poll = uv:poll(fd)
         self.polls[fd] = poll
     end
 

@@ -99,19 +99,19 @@ end)
 
 -- Set up the server to handle requests.
 function Server.set_up(self, config)
-    self.server = loop:new_tcp()
+    self.server = loop:tcp()
     self.server:bind(config.host, config.port)
 
     print("Listening for requests on http://" .. config.host .. ":" .. config.port)
 
     self.server:listen(1, function()
-        local client = loop:new_tcp()
+        local client = loop:tcp()
         self.server:accept(client)
         a.run(on_connection(client, self.app))
     end)
 
     -- register SIGINT / Ctrl-C handler
-    loop:new_signal():start(2, function(signum)
+    loop:signal():start(2, function(signum)
         loop:stop()
     end)
 end

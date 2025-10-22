@@ -4,12 +4,12 @@ local name = "/tmp/mike-pipe"
 os.execute("rm -f " .. name)
 
 -- server
-local server = loop:new_pipe()
+local server = loop:pipe()
 server:bind(name)
 print("server listening")
 server:listen(16, function()
     print("new client connected")
-    local client = loop:new_pipe()
+    local client = loop:pipe()
     server:accept(client)
     client:read_start(function(data)
         print("server received: ", data)
@@ -22,7 +22,7 @@ server:listen(16, function()
 end)
 
 -- client
-local client = loop:new_pipe()
+local client = loop:pipe()
 client:connect(name, function()
     client:read_start(function(data)
         print("client received: ", data)
