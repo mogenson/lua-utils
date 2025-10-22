@@ -264,26 +264,14 @@ end
 ---@param callback function
 function Timer:recurring(interval, callback)
     local function timer_cb(handle) return callback and callback() end
-
-    local cache = self:get_cache()
-    if not cache then cache = self:make_cache() end
-    if cache.timer_cb == nil then
-        cache.timer_cb = ffi.cast("uv_timer_cb", timer_cb)
-    else
-        cache.timer_cb:set(timer_cb)
-    end
-
-    check(libuv.uv_timer_start(self, cache.timer_cb, interval, interval))
+    local cb = self:cache_callback("timer_cb", timer_cb)
+    check(libuv.uv_timer_start(self, cb, interval, interval))
 end
 
 ---Stops a timer.
 ---@param self ffi.cdata*
 function Timer:stop()
-    local cache = self:get_cache()
-    if cache and cache.timer_cb ~= nil then
-        cache.timer_cb:free()
-        cache.timer_cb = nil
-    end
+    self:cache_callback("timer_cb", nil)
     check(libuv.uv_timer_stop(self))
 end
 
@@ -324,25 +312,14 @@ function Poll:start(events, callback)
         return callback and callback(events)
     end
 
-    local cache = self:get_cache()
-    if not cache then cache = self:make_cache() end
-    if cache.poll_cb == nil then
-        cache.poll_cb = ffi.cast("uv_poll_cb", poll_cb)
-    else
-        cache.poll_cb:set(poll_cb)
-    end
-
-    check(libuv.uv_poll_start(self, events, cache.poll_cb))
+    local cb = self:cache_callback("poll_cb", poll_cb)
+    check(libuv.uv_poll_start(self, events, cb))
 end
 
 ---Stops polling a file descriptor.
 ---@param self ffi.cdata*
 function Poll:stop()
-    local cache = self:get_cache()
-    if cache and cache.poll_cb ~= nil then
-        cache.poll_cb:free()
-        cache.poll_cb = nil
-    end
+    self:cache_callback("poll_cb", nil)
     check(libuv.uv_poll_stop(self))
 end
 
@@ -462,16 +439,9 @@ function Stream:listen(backlog, callback)
         return callback and callback()
     end
 
-    local cache = self:get_cache()
-    if not cache then cache = self:make_cache() end
-    if cache.connection_cb == nil then
-        cache.connection_cb = ffi.cast("uv_connection_cb", connection_cb)
-    else
-        cache.connection_cb:set(connection_cb)
-    end
-
     local stream = ffi.cast("uv_stream_t*", self)
-    check(libuv.uv_listen(stream, backlog, cache.connection_cb))
+    local cb = self:cache_callback("connection_cb", connection_cb)
+    check(libuv.uv_listen(stream, backlog, cb))
 end
 
 ---Accept a connecting client
@@ -498,24 +468,13 @@ function Stream:read_start(callback)
         end
     end
 
-    local cache = self:get_cache()
-    if not cache then cache = self:make_cache() end
-    if cache.read_cb == nil then
-        cache.read_cb = ffi.cast("uv_read_cb", read_cb)
-    else
-        cache.read_cb:set(read_cb)
-    end
-
-    check(libuv.uv_read_start(stream, Stream.alloc_cb, cache.read_cb))
+    local cb = self:cache_callback("read_cb", read_cb)
+    check(libuv.uv_read_start(stream, Stream.alloc_cb, cb))
 end
 
 ---Stop reading from a stream
 function Stream:read_stop()
-    local cache = self:get_cache()
-    if cache and cache.read_cb ~= nil then
-        cache.read_cb:free()
-        cache.read_cb = nil
-    end
+    self:cache_callback("read_cb", nil)
     check(libuv.uv_read_stop(ffi.cast("uv_stream_t*", self)))
 end
 
@@ -654,6 +613,26 @@ function Handle:make_cache()
     local cache = assert(pointer(ffi.cast("cache_t*", ffi.C.malloc(ffi.sizeof("cache_t")))))
     self:set_cache(cache)
     return cache
+end
+
+---Cache a function as a FFI callback
+---@param name string cache_t struct member
+---@param callback function|nil function to save or delete
+---@return ffi.cdata*|nil ffi callback
+function Handle:cache_callback(name, callback)
+    local cache = self:get_cache()
+    if callback then
+        if not cache then cache = self:make_cache() end
+        if cache[name] == nil then
+            cache[name] = ffi.cast(("uv_%s"):format(name), callback)
+        else
+            cache[name]:set(callback)
+        end
+        return cache[name]
+    elseif cache and cache[name] then
+        cache[name]:free()
+        cache[name] = nil
+    end
 end
 
 ---Free the cache for a handle
