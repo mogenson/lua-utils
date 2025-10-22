@@ -82,6 +82,7 @@ ffi.cdef(string.format([[
     struct uv_pipe_s {uint8_t _[%d];};
     struct uv_timer_s {uint8_t _[%d];};
     struct uv_poll_s {uint8_t _[%d];};
+    struct uv_signal_s {uint8_t _[%d];};
 ]],
     tonumber(libuv.uv_loop_size()),
     tonumber(libuv.uv_req_size(libuv.UV_CONNECT)),
@@ -92,7 +93,8 @@ ffi.cdef(string.format([[
     tonumber(libuv.uv_handle_size(libuv.UV_TTY)),
     tonumber(libuv.uv_handle_size(libuv.UV_NAMED_PIPE)),
     tonumber(libuv.uv_handle_size(libuv.UV_TIMER)),
-    tonumber(libuv.uv_handle_size(libuv.UV_POLL))
+    tonumber(libuv.uv_handle_size(libuv.UV_POLL)),
+    tonumber(libuv.uv_handle_size(libuv.UV_SIGNAL))
 ))
 
 ffi.cdef([[
@@ -109,6 +111,7 @@ ffi.cdef([[
     typedef struct uv_pipe_s uv_pipe_t;
     typedef struct uv_timer_s uv_timer_t;
     typedef struct uv_poll_s uv_poll_t;
+    typedef struct uv_signal_s uv_signal_t;
 
     const char* uv_err_name(int err);
     const char* uv_strerror(int err);
@@ -341,6 +344,38 @@ function Poll:stop()
         cache.poll_cb = nil
     end
     check(libuv.uv_poll_stop(self))
+end
+
+ffi.cdef([[
+    typedef void (*uv_signal_cb)(uv_signal_t* handle, int signum);
+
+    int uv_signal_init(uv_loop_t* loop, uv_signal_t* signal);
+    int uv_signal_start_oneshot(uv_signal_t* signal, uv_signal_cb cb, int signum);
+]])
+
+local Signal = setmetatable({}, Handle)
+ffi.metatype(ffi.typeof("uv_signal_t"), { __index = Signal, __tostring = Handle.__tostring, __gc = Handle.__gc })
+
+---Creates a new signal.
+---@param self ffi.cdata*
+---@return ffi.cdata*
+function Loop:new_signal()
+    local signal = ffi.new("uv_signal_t")
+    check(libuv.uv_signal_init(self, signal))
+    return signal
+end
+
+---Starts a signal.
+---@param self ffi.cdata*
+---@param signum number
+---@param callback function
+function Signal:start(signum, callback)
+    local cb = nil
+    cb = ffi.cast("uv_signal_cb", function(handle, signum)
+        cb:free()
+        return callback and callback(signum)
+    end)
+    check(libuv.uv_signal_start_oneshot(self, cb, signum))
 end
 
 ffi.cdef([[

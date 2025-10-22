@@ -92,25 +92,10 @@ local on_connection = a.sync(function(client, app)
         table.insert(wire_response, response.body)
 
         a.wait(write(client, table.concat(wire_response)))
-    else
-        client:close()
     end
+
+    client:close()
 end)
-
-
-function Server.on_sigint(_)
-    loop:stop()
-end
-
--- Set sigint handler.
---
--- Clean up immediately.
--- When the main loop is running in the default usage,
--- SIGINT doesn't respond unless it happens twice.
--- This handler ensures that the clean up happens right away.
-function Server._set_sigint(_)
-    -- MIKE TODO set signal handler
-end
 
 -- Set up the server to handle requests.
 function Server.set_up(self, config)
@@ -125,7 +110,10 @@ function Server.set_up(self, config)
         a.run(on_connection(client, self.app))
     end)
 
-    self:_set_sigint()
+    -- register SIGINT / Ctrl-C handler
+    loop:new_signal():start(2, function(signum)
+        loop:stop()
+    end)
 end
 
 -- Run the uv loop.
