@@ -196,7 +196,7 @@ ffi.cdef([[
 ]])
 
 local Loop = setmetatable({}, { __index = libuv })
-ffi.metatype(ffi.typeof("uv_loop_t"), { __index = Loop, __tostring = Handle.__tostring, __gc = Handle.__gc })
+ffi.metatype(ffi.typeof("uv_loop_t"), { __index = Loop })
 
 ---Returns the current time in milliseconds.
 ---@param self ffi.cdata*
