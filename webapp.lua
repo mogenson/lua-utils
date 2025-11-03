@@ -37,4 +37,9 @@ local controllers = { home = home }
 local routes = { Route("/", controllers.home) }
 local config = { app = Application(routes), host = "127.0.0.1", port = 8080 }
 
+-- open web browser
+local command = jit.os == "OSX" and "open" or jit.os == "Linux" and "termux-open-url" or "echo"
+os.execute(("%s http://%s:%d"):format(command, config.host, config.port))
+
+-- run server
 os.exit(main.run(config) and 0 or -1)
