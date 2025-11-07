@@ -1,6 +1,10 @@
 local ffi = require("ffi")
 local C = ffi.C
 
+-- Lua 5.2+ compat API
+table.pack = table.pack or function(...) return { n = select("#", ...), ... } end
+table.unpack = table.unpack or unpack
+
 ---@alias cdata  userdata C types returned from FFI
 ---@alias id     cdata    Objective-C object
 ---@alias Class  cdata    Objective-C Class
@@ -198,7 +202,7 @@ local function msgSend(self, selector, ...)
     end
     table.insert(signature, ")")
     local fn = cast(table.concat(signature), C.objc_msgSend)
-    return ptr(fn(unpack(call_args, 1, call_args.n)))
+    return ptr(fn(table.unpack(call_args, 1, call_args.n)))
 end
 
 ---load a Framework
