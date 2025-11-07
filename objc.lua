@@ -79,6 +79,22 @@ local type_encoding = setmetatable({
     __newindex = nil, -- read only table
 })
 
+local cast = setmetatable({}, {
+    ---cast an object to C type using cached type
+    ---@param self table
+    ---@param typedef string C type definition
+    ---@param object any object to cast
+    ---@return cdata c
+    __call = function(self, typedef, object)
+        local typeobj = self[typedef]
+        if not typeobj then
+            typeobj = ffi.typeof(typedef)
+            self[typedef] = typeobj
+        end
+        return ffi.cast(typeobj, object)
+    end
+})
+
 ---convert a NULL pointer to nil
 ---@param p cdata pointer
 ---@return cdata | nil
@@ -147,14 +163,14 @@ local function msgSend(self, selector, ...)
             if c_type == "SEL" then
                 return sel(lua_var)
             elseif c_type == "char*" then
-                return ffi.cast(c_type, lua_var)
+                return cast(c_type, lua_var)
             end
         elseif type(lua_var) == "cdata" and c_type == "id" and ffi.istype("Class", lua_var) then
-            return ffi.cast(c_type, lua_var) -- sometimes method signatures use id instead of Class
+            return cast(c_type, lua_var) -- sometimes method signatures use id instead of Class
         elseif lua_var == nil then
-            return ffi.new(c_type)           -- convert to a null pointer
+            return ffi.new(c_type)       -- convert to a null pointer
         end
-        return lua_var                       -- no conversion necessary
+        return lua_var                   -- no conversion necessary
     end
 
     if type(self) == "string" then self = cls(self) end
@@ -181,9 +197,8 @@ local function msgSend(self, selector, ...)
         if i < num_method_args then table.insert(signature, ",") end
     end
     table.insert(signature, ")")
-    local signature = table.concat(signature) ---@diagnostic disable-line: redefined-local
-
-    return ptr(ffi.cast(signature, C.objc_msgSend)(unpack(call_args, 1, call_args.n)))
+    local fn = cast(table.concat(signature), C.objc_msgSend)
+    return ptr(fn(unpack(call_args, 1, call_args.n)))
 end
 
 ---load a Framework
@@ -228,7 +243,7 @@ local function addMethod(class, selector, types, func)
     table.insert(signature, ")")
     local signature = table.concat(signature) ---@diagnostic disable-line: redefined-local
 
-    local imp = ffi.cast("IMP", ffi.cast(signature, func))
+    local imp = cast("IMP", cast(signature, func))
     assert(C.class_addMethod(class, selector, imp, types) == 1)
     return imp
 end
