@@ -1,8 +1,8 @@
 local a = require("async")
 local loop = require("libuv")
-local Parser = require("atlas.server.http_11_parser")
-local ParserErrors = require("atlas.server.parser_errors")
-local http_statuses = require("atlas.server.statuses")
+local Parser = require("alf.server.http_11_parser")
+local ParserErrors = require("alf.server.parser_errors")
+local http_statuses = require("alf.server.statuses")
 
 local Server = {}
 Server.__index = Server

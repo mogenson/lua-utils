@@ -1,6 +1,6 @@
 local utils = require("pl.utils")
 
-local Server = require("atlas.server.server")
+local Server = require("alf.server.server")
 
 -- Load the app from the configuration.
 local function load_app(config)

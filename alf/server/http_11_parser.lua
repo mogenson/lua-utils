@@ -15,7 +15,7 @@
 --  > Various ad hoc limitations on request-line length are found in practice.
 --  > It is RECOMMENDED that all HTTP senders and recipients support, at a minimum,
 --  > request-line lengths of 8000 octets.
-local ParserErrors = require("atlas.server.parser_errors")
+local ParserErrors = require("alf.server.parser_errors")
 local tablex = require("pl.tablex")
 
 local Parser = {}

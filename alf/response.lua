@@ -1,15 +1,19 @@
+---@class Response
+---@field content_type string
+---@field headers {[string]: string}[]
+---@field status_code number
+---@field content string
 local Response = {}
 Response.__index = Response
 
 setmetatable(Response, {
-    -- An HTTP response
-    --
-    -- The response object is the primary output interface for controllers.
-    --
-    --      content: The content to return over the wire (default: "")
-    -- content_type: The type of content data (default: "text/html")
-    --  status_code: The status code (default: 200)
-    --      headers: HTTP headers (default: {})
+    ---An HTTP response
+    ---The response object is the primary output interface for controllers.
+    ---@param content string The content to return over the wire (default: "")
+    ---@param content_type string The type of content data (default: "text/html")
+    ---@param status_code number The status code (default: 200)
+    ---@param headers table HTTP headers (default: {})
+    ---@return Response
     __call = function(_, content, content_type, status_code, headers)
         return setmetatable({
             content = content or "",
@@ -20,9 +24,8 @@ setmetatable(Response, {
     end
 })
 
--- Send the response data over the ASGI interface
---
--- send: The ASGI send callable
+---Send the response data over the ASGI interface
+---@param send function The ASGI send callable
 function Response.__call(self, send)
     -- prepend content type header
     table.insert(self.headers, 1, { "content-type", self.content_type })
