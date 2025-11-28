@@ -33,9 +33,9 @@ Application.__call = a.sync(function(self, scope, receive, send)
         if match == true then      -- good match
             return assert(route):run(Request(scope))
         elseif match == false then -- bad match
-            return Response("Method Not Allowed", "text/html", 405)
+            return Response("Method Not Allowed", "text/plain", 405)
         else                       -- no match
-            return Response("Not Found", "text/html", 404)
+            return Response("Not Found", "text/plain", 404)
         end
     end)()
 
