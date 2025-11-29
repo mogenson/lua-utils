@@ -1,11 +1,14 @@
 local a = require("async")
-local loop = require("libuv")
-local main = require("alf.server.main")
-local Server = require("alf.server.server")
-local Application = require("alf.application")
-local Route = require("alf.route")
-local Response = require("alf.response")
 local curl = require("libcurl")
+local json = require("json")
+local loop = require("libuv")
+local dbg = require("debugger")
+
+local main = require("alf.server.main")
+local Application = require("alf.application")
+local Response = require("alf.response")
+local Route = require("alf.route")
+local Server = require("alf.server.server")
 
 ---Sleep current async task until time has elapsed
 ---@param ms number duration in milliseconds
@@ -30,26 +33,80 @@ local fetch = a.sync(function(url)
     return table.concat(content)
 end)
 
+---Fetch next arrival time
+---@param route string name of the mbta route
+---@param stop number id of mbta stop
+---@return string arrival time
+local nextbus = a.sync(function(route, stop)
+    local url = "https://api-v3.mbta.com/predictions?page[limit]=1&filter[route]=%s&filter[stop]=%d"
+    local encoded = a.wait(fetch(url:format(route, stop)))
+    local decoded = json.decode(encoded)
+    return decoded.data[1].attributes.arrival_time:match("T(%d%d:%d%d)")
+end)
+
 local function home(request)
     local html = { [[
 <html>
 <head>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
 </head>
-<body>]] }
+<body>
+<h1>Arrivals</h1>
+<pre id="arrivals">
+  Click "Refresh" to load arrival times.
+</pre>
+<button id="refresh_button">Refresh</button>
+<button id="close_button">Close</button>
+<script>
+  document.getElementById('refresh_button').addEventListener('click', function() {
+    fetch('/arrivals')
+      .then(response => response.text())
+      .then(data => {
+        document.getElementById('arrivals').innerHTML = data;
+      });
+  });
+  document.getElementById('close_button').addEventListener('click', function() {
+    fetch('/shutdown')
+      .then(response => {
+        window.close();
+      });
+  });
+document.getElementById('refresh_button').click()
+</script>
+]] }
 
     table.insert(html, "<p>LibUV time: " .. loop:now() .. "</p>")
-
     table.insert(html, "<p>Using " .. collectgarbage("count") .. " Kb</p>")
-
     table.insert(html, "</body>\r\n</html>")
 
     return Response(table.concat(html, "\r\n"))
 end
 
 local function arrivals(request)
-    local content = a.wait(fetch("https://httpbin.org/json"))
-    print(content)
+    local content = ([[
+Teele Square
+    87 bus: %s
+    88 bus: %s
+Davis Square
+    87 bus: %s
+    88 bus: %s
+    Red line: %s
+Kendall Square
+    Red line: %s
+    ]]):format(
+        a.wait(a.gather({
+            -- Teele Square
+            nextbus("87", 2576),
+            nextbus("88", 2576),
+            -- Davis Square
+            nextbus("87", 5104),
+            nextbus("88", 5104),
+            nextbus("Red", 70063),
+            -- Kendall Square
+            nextbus("Red", 70072)
+        }))
+
+    )
     return Response(content, "text/plain")
 end
 
