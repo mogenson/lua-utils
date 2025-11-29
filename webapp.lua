@@ -110,8 +110,15 @@ Kendall Square
     return Response(content, "text/plain")
 end
 
-local controllers = { home = home, arrivals = arrivals }
-local routes = { Route("/", controllers.home), Route("/arrivals", controllers.arrivals) }
+local function shutdown(_)
+    loop:stop()
+end
+
+local routes = {
+    Route("/", home),
+    Route("/arrivals", arrivals),
+    Route("/shutdown", shutdown)
+}
 local config = { app = Application(routes), host = "127.0.0.1", port = 8080 }
 
 -- open web browser
