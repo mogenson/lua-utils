@@ -2,7 +2,6 @@ local a = require("async")
 local curl = require("libcurl")
 local json = require("json")
 local loop = require("libuv")
-local dbg = require("debugger")
 
 local main = require("alf.server.main")
 local Application = require("alf.application")
@@ -48,6 +47,7 @@ local function home(request)
     local html = { [[
 <html>
 <head>
+<meta name="viewport" content="width=device-width, initial-scale=1.5">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
 </head>
 <body>
