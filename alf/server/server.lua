@@ -112,7 +112,7 @@ function Server.set_up(self, config)
 
     -- register SIGINT / Ctrl-C handler
     loop:signal():start(2, function(signum)
-        loop:stop()
+        loop:shutdown()
     end)
 end
 

@@ -111,7 +111,8 @@ Kendall Square
 end
 
 local function shutdown(_)
-    loop:stop()
+    loop:timer():start(100, function() loop:shutdown() end)
+    return Response()
 end
 
 local routes = {
@@ -126,4 +127,4 @@ local command = jit.os == "OSX" and "open" or jit.os == "Linux" and "termux-open
 os.execute(("%s http://%s:%d"):format(command, config.host, config.port))
 
 -- run server
-os.exit(main.run(config) and 0 or -1)
+os.exit(main.run(config) and 0 or 1)

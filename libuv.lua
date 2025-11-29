@@ -133,6 +133,22 @@ local function check(status)
     return status < 0 and error(get_error(status)) or assert(tonumber(status))
 end
 
+local cast = setmetatable({}, {
+    ---cast an object to C type using cached type
+    ---@param self table
+    ---@param typedef string C type definition
+    ---@param object any object to cast
+    ---@return cdata c
+    __call = function(self, typedef, object)
+        local typeobj = self[typedef]
+        if not typeobj then
+            typeobj = ffi.typeof(typedef)
+            self[typedef] = typeobj
+        end
+        return ffi.cast(typeobj, object)
+    end
+})
+
 ---Convert a NULL pointer to nil
 ---@param p ffi.cdata*
 ---@return ffi.cdata* | nil
@@ -143,7 +159,7 @@ end
 ---Return the address of a pointer or cdata
 ---@param cdata ffi.cdata | ffi.cdata*
 local function address(cdata)
-    return assert(tonumber(ffi.cast("intptr_t", ffi.cast("void*", cdata))))
+    return assert(tonumber(cast("intptr_t", cast("void*", cdata))))
 end
 
 ffi.cdef([[
@@ -151,6 +167,7 @@ ffi.cdef([[
 
     const char *uv_handle_type_name(uv_handle_type type);
     int uv_is_active(const uv_handle_t *handle);
+    int uv_is_closing(const uv_handle_t *handle);
     uv_handle_type uv_handle_get_type(const uv_handle_t *handle);
     void uv_close(uv_handle_t *handle, uv_close_cb close_cb);
     void* uv_handle_get_data(const uv_handle_t* handle);
@@ -161,22 +178,26 @@ local Handle = {}
 Handle.__index = Handle
 ffi.metatype(ffi.typeof("uv_handle_t"), Handle)
 
+local close_cb = cast("uv_close_cb", function(handle)
+    Handle.free_cache(handle)
+end)
+
 function Handle.__tostring(self)
-    local id = libuv.uv_handle_get_type(ffi.cast("uv_handle_t*", self))
+    local id = libuv.uv_handle_get_type(cast("uv_handle_t*", self))
     return string.format("%s: %d", ffi.string(libuv.uv_handle_type_name(id)), address(self))
 end
 
 ---Close a libuv handle
 ---@param self ffi.cdata
 function Handle:close()
-    libuv.uv_close(ffi.cast("uv_handle_t*", self), nil)
-    self:free_cache()
+    libuv.uv_close(cast("uv_handle_t*", self), close_cb)
 end
 
 ---This is the garbage collection metamethod for libuv handles.
 ---@param self ffi.cdata*
 function Handle:__gc()
-    if libuv.uv_is_active(ffi.cast("uv_handle_t*", self)) > 0 then
+    local handle = cast("uv_handle_t*", self)
+    if libuv.uv_is_active(handle) > 0 and libuv.uv_is_closing(handle) == 0 then
         self:close()
     end
 end
@@ -188,11 +209,14 @@ ffi.cdef([[
         UV_RUN_NOWAIT
     } uv_run_mode;
 
+    typedef void (*uv_walk_cb)(uv_handle_t *handle, void *arg);
+
     uv_loop_t* uv_default_loop();
     void uv_stop(uv_loop_t* loop);
     uint64_t uv_now(const uv_loop_t* loop);
     void uv_update_time(uv_loop_t *loop);
     int uv_run(uv_loop_t* loop, uv_run_mode mode);
+    void uv_walk(uv_loop_t *loop, uv_walk_cb walk_cb, void *arg);
 ]])
 
 local Loop = setmetatable({}, { __index = libuv })
@@ -215,6 +239,18 @@ end
 ---@param self ffi.cdata*
 function Loop:stop()
     libuv.uv_stop(self)
+end
+
+---Stops the event loop and closes all handles
+---@param self ffi.cdata8
+function Loop:shutdown()
+    libuv.uv_stop(self)
+    libuv.uv_walk(self, cast("uv_walk_cb", function(handle, arg)
+        if libuv.uv_is_closing(handle) == 0 then
+            libuv.uv_close(handle, close_cb);
+        end
+    end), nil)
+    libuv.uv_run(self, libuv.UV_RUN_ONCE)
 end
 
 ---Start the event loop.
@@ -251,7 +287,7 @@ end
 ---@param callback function
 function Timer:start(timeout, callback)
     local cb = nil
-    cb = ffi.cast("uv_timer_cb", function(handle)
+    cb = cast("uv_timer_cb", function(handle)
         cb:free()
         return callback and callback()
     end)
@@ -348,7 +384,7 @@ end
 ---@param callback function
 function Signal:start(signum, callback)
     local cb = nil
-    cb = ffi.cast("uv_signal_cb", function(handle, signum)
+    cb = cast("uv_signal_cb", function(handle, signum)
         cb:free()
         return callback and callback(signum)
     end)
@@ -369,13 +405,13 @@ ffi.metatype(ffi.typeof("uv_shutdown_t"), Request)
 
 ---Cancel a request
 function Request:cancel()
-    check(libuv.uv_cancel(ffi.cast("uv_req_t*", self)))
+    check(libuv.uv_cancel(cast("uv_req_t*", self)))
 end
 
 ---Return the request type as a string
 ---@return string
 function Request.__tostring(self)
-    local id = libuv.uv_req_get_type(ffi.cast("uv_req_t*", self))
+    local id = libuv.uv_req_get_type(cast("uv_req_t*", self))
     return ffi.string(libuv.uv_req_type_name(id))
 end
 
@@ -401,11 +437,11 @@ ffi.cdef([[
 ]])
 
 local Stream = setmetatable({
-    alloc_cb = ffi.cast("uv_alloc_cb", function(handle, suggested_size, buf)
+    alloc_cb = cast("uv_alloc_cb", function(handle, suggested_size, buf)
         local cache = handle:get_cache()
         if not cache then cache = handle:make_cache() end
         if cache.read_buf.base == nil then
-            cache.read_buf.base = assert(pointer(ffi.cast("char*", ffi.C.malloc(suggested_size))))
+            cache.read_buf.base = assert(pointer(cast("char*", ffi.C.malloc(suggested_size))))
             cache.read_buf.len = suggested_size
         end
         buf.base = cache.read_buf.base
@@ -418,10 +454,10 @@ ffi.metatype(ffi.typeof("uv_stream_t"), { __index = Stream, __tostring = Handle.
 ---Shutdown and close a stream
 ---@param callback function|nil
 function Stream:shutdown(callback)
-    local req = ffi.cast("uv_shutdown_t*", ffi.C.malloc(ffi.sizeof("uv_shutdown_t")))
-    local handle = ffi.cast("uv_stream_t*", self)
+    local req = cast("uv_shutdown_t*", ffi.C.malloc(ffi.sizeof("uv_shutdown_t")))
+    local handle = cast("uv_stream_t*", self)
     local cb = nil
-    cb = ffi.cast("uv_shutdown_cb", function(req, status)
+    cb = cast("uv_shutdown_cb", function(req, status)
         cb:free()
         ffi.C.free(req)
         check(status)
@@ -439,7 +475,7 @@ function Stream:listen(backlog, callback)
         return callback and callback()
     end
 
-    local stream = ffi.cast("uv_stream_t*", self)
+    local stream = cast("uv_stream_t*", self)
     local cb = self:cache_callback("connection_cb", connection_cb)
     check(libuv.uv_listen(stream, backlog, cb))
 end
@@ -447,15 +483,15 @@ end
 ---Accept a connecting client
 ---@param client ffi.cdata*
 function Stream:accept(client)
-    local server = ffi.cast("uv_stream_t*", self)
-    local client = ffi.cast("uv_stream_t*", client)
+    local server = cast("uv_stream_t*", self)
+    local client = cast("uv_stream_t*", client)
     check(libuv.uv_accept(server, client))
 end
 
 ---Start reading from a stream
 ---@param callback fun(data:string|nil)
 function Stream:read_start(callback)
-    local stream = ffi.cast("uv_stream_t*", self)
+    local stream = cast("uv_stream_t*", self)
 
     local function read_cb(stream, nread, buf)
         if nread == 0 then
@@ -475,21 +511,21 @@ end
 ---Stop reading from a stream
 function Stream:read_stop()
     self:cache_callback("read_cb", nil)
-    check(libuv.uv_read_stop(ffi.cast("uv_stream_t*", self)))
+    check(libuv.uv_read_stop(cast("uv_stream_t*", self)))
 end
 
 ---Write data to a stream
 ---@param data string
 ---@param callback function|nil
 function Stream:write(data, callback)
-    local req = ffi.cast("uv_write_t*", ffi.C.malloc(ffi.sizeof("uv_write_t")))
-    local handle = ffi.cast("uv_stream_t*", self)
+    local req = cast("uv_write_t*", ffi.C.malloc(ffi.sizeof("uv_write_t")))
+    local handle = cast("uv_stream_t*", self)
     local bufs = ffi.new("uv_buf_t[1]")
-    bufs[0].base = ffi.cast("char*", data)
+    bufs[0].base = cast("char*", data)
     bufs[0].len = #data
     local nbufs = 1
     local cb = nil
-    cb = ffi.cast("uv_write_cb", function(req, status)
+    cb = cast("uv_write_cb", function(req, status)
         cb:free()
         ffi.C.free(req)
         check(status)
@@ -524,7 +560,7 @@ end
 function Tcp:bind(host, port)
     local addr = ffi.new("struct sockaddr_in")
     check(libuv.uv_ip4_addr(host, port, addr))
-    check(libuv.uv_tcp_bind(self, ffi.cast("const struct sockaddr*", addr), 0))
+    check(libuv.uv_tcp_bind(self, cast("const struct sockaddr*", addr), 0))
 end
 
 ---Connect to an IP address and port
@@ -534,9 +570,9 @@ end
 function Tcp:connect(host, port, callback)
     local addr = ffi.new("struct sockaddr_in")
     check(libuv.uv_ip4_addr(host, port, addr))
-    local req = ffi.cast("uv_connect_t*", ffi.C.malloc(ffi.sizeof("uv_connect_t")))
+    local req = cast("uv_connect_t*", ffi.C.malloc(ffi.sizeof("uv_connect_t")))
     local cb = nil
-    cb = ffi.cast("uv_connect_cb", function(req, status)
+    cb = cast("uv_connect_cb", function(req, status)
         cb:free()
         ffi.C.free(req)
         check(status)
@@ -573,9 +609,9 @@ end
 ---@param name string
 ---@param callback function
 function Pipe:connect(name, callback)
-    local req = ffi.cast("uv_connect_t*", ffi.C.malloc(ffi.sizeof("uv_connect_t")))
+    local req = cast("uv_connect_t*", ffi.C.malloc(ffi.sizeof("uv_connect_t")))
     local cb = nil
-    cb = ffi.cast("uv_connect_cb", function(req, status)
+    cb = cast("uv_connect_cb", function(req, status)
         cb:free()
         ffi.C.free(req)
         check(status)
@@ -597,20 +633,20 @@ ffi.cdef([[
 ---Return cache for handle
 ---@return ffi.cdata*|nil
 function Handle:get_cache()
-    return pointer(ffi.cast("cache_t*", libuv.uv_handle_get_data(ffi.cast("const uv_handle_t*", self))))
+    return pointer(cast("cache_t*", libuv.uv_handle_get_data(cast("const uv_handle_t*", self))))
 end
 
 ---Set cache for handle
 ---@param cache ffi.cdata*
 function Handle:set_cache(cache)
-    libuv.uv_handle_set_data(ffi.cast("uv_handle_t*", self), cache)
+    libuv.uv_handle_set_data(cast("uv_handle_t*", self), cache)
 end
 
 ---Allocate a new cache for handle
 ---@return ffi.cdata*
 function Handle:make_cache()
     assert(self:get_cache() == nil)
-    local cache = assert(pointer(ffi.cast("cache_t*", ffi.C.malloc(ffi.sizeof("cache_t")))))
+    local cache = assert(pointer(cast("cache_t*", ffi.C.malloc(ffi.sizeof("cache_t")))))
     self:set_cache(cache)
     return cache
 end
@@ -624,7 +660,7 @@ function Handle:cache_callback(name, callback)
     if callback then
         if not cache then cache = self:make_cache() end
         if cache[name] == nil then
-            cache[name] = ffi.cast(("uv_%s"):format(name), callback)
+            cache[name] = cast(("uv_%s"):format(name), callback)
         else
             cache[name]:set(callback)
         end
