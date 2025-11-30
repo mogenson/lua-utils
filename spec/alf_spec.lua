@@ -28,11 +28,11 @@ describe("Router", function()
         assert.are.equal(route, found_route)
     end)
 
-    it("should extract path parameters", function()
+    it("should extract int path parameter", function()
         local user_id
         local function user_details(_, id)
             user_id = id
-            return Response("test")
+            return Response()
         end
 
         local route = Route("/users/{id:int}", user_details)
@@ -43,6 +43,40 @@ describe("Router", function()
 
         found_route:run({ path = "/users/123" })
         assert.are.equal(123, user_id)
+    end)
+
+    it("should extract number path parameter", function()
+        local number
+        local function controller(_, param)
+            number = param
+            return Response()
+        end
+
+        local route = Route("/test/{param:number}", controller)
+        local router = Router({ route })
+        local match, found_route = router:route("GET", "/test/-3.14")
+        assert.is_true(match)
+        assert.are.equal(route, found_route)
+
+        found_route:run({ path = "/test/-3.14" })
+        assert.are.equal(-3.14, number)
+    end)
+
+    it("should extract string path parameter", function()
+        local name
+        local function controller(_, str)
+            name = str
+            return Response()
+        end
+
+        local route = Route("/test/{name:string}", controller)
+        local router = Router({ route })
+        local match, found_route = router:route("GET", "/test/John")
+        assert.is_true(match)
+        assert.are.equal(route, found_route)
+
+        found_route:run({ path = "/test/John" })
+        assert.are.equal("John", name)
     end)
 end)
 

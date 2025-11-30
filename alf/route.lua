@@ -6,9 +6,13 @@ local PARAMETER_PATTERN = "{([a-zA-Z_][a-zA-Z0-9_]*)(:[a-zA-Z_][a-zA-Z0-9_]*)}"
 local CONVERTER_PATTERNS = {
     -- string should include any character except a slash.
     string = "([^/]*)",
-    int = "([%d]*)",
+    int = "(%-?%d*)",
+    number = "(%-?%d*%.?%d*)"
 }
-local CONVERTER_TRANSFORMS = { int = math.floor }
+local CONVERTER_TRANSFORMS = {
+    int = math.floor,
+    number = tonumber,
+}
 
 ---Make a pattern that matches the path template
 ---@param path string a path template
