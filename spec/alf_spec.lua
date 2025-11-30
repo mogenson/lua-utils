@@ -112,7 +112,7 @@ describe("E2E", function()
 
         -- fetch content
         local content = {}
-        curl:add(("http://%s:%d/test"):format(config.host, config.port),
+        curl:get(("http://%s:%d/test"):format(config.host, config.port),
             function(data) table.insert(content, data) end,
             function(_) loop:shutdown() end
         )

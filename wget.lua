@@ -1,12 +1,12 @@
 local loop = require("libuv")
-local multi = require("libcurl")
+local curl = require("libcurl")
 
 
 for i, url in ipairs(arg) do
     local name = i .. ".download"
     print(string.format("Downloading %s as %s", url, name))
     local file = assert(io.open(i .. ".download", "w"))
-    multi:add(url,
+    curl:get(url,
         function(data)
             file:write(data)
         end,

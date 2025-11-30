@@ -1,7 +1,7 @@
 local ffi = require("ffi")
-local uv = require("libuv")
+local loop = require("libuv")
 
-local libcurl = ffi.load('curl')
+local libcurl = ffi.load("curl")
 ffi.cdef([[
     enum CURLMSG {
         CURLMSG_NONE,
@@ -18,31 +18,26 @@ ffi.cdef([[
         } data;
     };
 
-    enum curl_global_option
-    {
+    enum curl_global_option {
         CURL_GLOBAL_ALL = 2,
     };
 
-    enum curl_multi_option
-    {
+    enum curl_multi_option {
         CURLMOPT_SOCKETFUNCTION = 20000 + 1,
         CURLMOPT_TIMERFUNCTION  = 20000 + 4
     };
 
-    enum curl_socket_option
-    {
+    enum curl_socket_option {
         CURL_SOCKET_TIMEOUT = -1
     };
 
-    enum curl_poll_option
-    {
+    enum curl_poll_option {
         CURL_POLL_IN     = 1,
         CURL_POLL_OUT    = 2,
         CURL_POLL_REMOVE = 4
     };
 
-    enum curl_option
-    {
+    enum curl_option {
         CURLOPT_CAINFO         = 10065,
         CURLOPT_CONNECTTIMEOUT = 78,
         CURLOPT_COOKIE         = 10022,
@@ -60,8 +55,7 @@ ffi.cdef([[
         CURLOPT_WRITEDATA      = 10001,
     };
 
-    enum curl_cselect_option
-    {
+    enum curl_cselect_option {
         CURL_CSELECT_IN  = 1,
         CURL_CSELECT_OUT = 2
     };
@@ -100,7 +94,7 @@ local Multi = {
     multi = libcurl.curl_multi_init(),
     polls = {},
     handles = {},
-    timer = uv:timer(),
+    timer = loop:timer(),
 }
 
 --- Adds a new network request to the curl multi instance.
@@ -108,7 +102,7 @@ local Multi = {
 ---@param url string
 ---@param data_callback fun(data: string)
 ---@param finished_callback fun(result: number)
-function Multi:add(url, data_callback, finished_callback)
+function Multi:get(url, data_callback, finished_callback)
     local handle = libcurl.curl_easy_init()
     libcurl.curl_easy_setopt(handle,
         libcurl.CURLOPT_URL,
@@ -134,9 +128,7 @@ end
 function Multi:data_function(ptr, size, nmemb, handle)
     local len = size * nmemb
     local callback = (self.handles[address(handle)] or {}).data_callback
-    if callback then
-        callback(ffi.string(ptr, len))
-    end
+    if callback then callback(ffi.string(ptr, len)) end
     return len
 end
 
@@ -154,9 +146,9 @@ function Multi:socket_function(handle, fd, action)
     ---@param events number
     local function perform(events)
         local running_handles = ffi.new('int[1]')
-        if events == uv.UV_READABLE then
+        if events == loop.UV_READABLE then
             libcurl.curl_multi_socket_action(self.multi, fd, libcurl.CURL_CSELECT_IN, running_handles)
-        elseif events == uv.UV_WRITABLE then
+        elseif events == loop.UV_WRITABLE then
             libcurl.curl_multi_socket_action(self.multi, fd, libcurl.CURL_CSELECT_OUT, running_handles)
         end
 
@@ -168,23 +160,21 @@ function Multi:socket_function(handle, fd, action)
                 libcurl.curl_easy_cleanup(msg.handle)
                 local callback = (self.handles[address(msg.handle)] or {}).finished_callback
                 self.handles[address(msg.handle)] = nil
-                if callback then
-                    callback(tonumber(msg.data.result))
-                end
+                if callback then callback(tonumber(msg.data.result)) end
             end
         until msg == nil
     end
 
     local poll = self.polls[fd]
     if not poll then
-        poll = uv:poll(fd)
+        poll = loop:poll(fd)
         self.polls[fd] = poll
     end
 
     if action == libcurl.CURL_POLL_IN then
-        poll:start(uv.UV_READABLE, perform)
+        poll:start(loop.UV_READABLE, perform)
     elseif action == libcurl.CURL_POLL_OUT then
-        poll:start(uv.UV_WRITABLE, perform)
+        poll:start(loop.UV_WRITABLE, perform)
     elseif action == libcurl.CURL_POLL_REMOVE then
         poll:stop()
         self.polls[fd] = nil

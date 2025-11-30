@@ -1,5 +1,5 @@
 local a = require("async")
-local multi = require("libcurl")
+local curl = require("libcurl")
 local loop = require("libuv")
 
 describe("libcurl", function()
@@ -8,7 +8,7 @@ describe("libcurl", function()
         local q1 = a.queue()
         local q2 = a.queue()
 
-        multi:add(url,
+        curl:get(url,
             function(str) q1:put(str) end,
             function(result)
                 assert(result == 0)
@@ -16,7 +16,7 @@ describe("libcurl", function()
             end
         )
 
-        multi:add(url,
+        curl:get(url,
             function(str) q2:put(str) end,
             function(result)
                 assert(result == 0)

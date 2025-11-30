@@ -21,7 +21,7 @@ end)
 ---@return string content
 local fetch = a.sync(function(url)
     local q = a.queue()
-    curl:add(url,
+    curl:get(url,
         function(str) q:put(str) end,
         function(result) q:put(nil) end)
     local content, chunk = {}, nil
