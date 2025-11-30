@@ -15,9 +15,11 @@ setmetatable(Response, {
     ---@param headers table HTTP headers (default: {})
     ---@return Response
     __call = function(_, content, content_type, status_code, headers)
+        content = content or ""
+        content_type = content_type or content:find("<.+>") and "text/plain" or "text/html"
         return setmetatable({
-            content = content or "",
-            content_type = content_type or "text/html",
+            content = content,
+            content_type = content_type,
             status_code = status_code or 200,
             headers = headers or {},
         }, Response)
