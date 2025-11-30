@@ -30,31 +30,10 @@ local read = a.wrap(function(socket, cb)
 end)
 
 local on_connection = a.sync(function(client, app)
-    local receive = function()
-        return {
-            type = "http.request",
-            body = "",
-            -- Don't bother with more_body.
-            -- Make the server join the body together rather than pushing
-            -- that responsibility to the app.
-            more_body = false,
-        }
-    end
-
-    local response = {}
-    local send = function(event)
-        if event.type == "http.response.start" then
-            response.status = event.status
-            response.headers = event.headers
-        elseif event.type == "http.response.body" then
-            response.body = event.body
-        end
-    end
-
     local data = a.wait(read(client))
     if data then
         local parser = Parser()
-        local scope, _, parser_err = parser:parse(data) -- meta, body, parser_err
+        local scope, body, parser_err = parser:parse(data) -- meta, body, parser_err
 
         if parser_err then
             if parser_err == ParserErrors.INVALID_REQUEST_LINE then
@@ -67,15 +46,23 @@ local on_connection = a.sync(function(client, app)
             return
         end
 
-        scope.asgi = ASGI_VERSION
-        scope.http_version = "1.1"
-        -- Constant until the server supports TLS.
-        scope.scheme = "http"
-        scope.query_string = ""
-        scope.root_path = "" -- Not supporting applications mounted at some subpath
-        scope.headers = {}
-        scope.client = { "127.0.0.1", 8000 }
-        scope.server = { "127.0.0.1", 8000 }
+        local receive = function()
+            return {
+                type = "http.request",
+                body = body or "",
+                more_body = false,
+            }
+        end
+
+        local response = {}
+        local send = function(event)
+            if event.type == "http.response.start" then
+                response.status = event.status
+                response.headers = event.headers
+            elseif event.type == "http.response.body" then
+                response.body = event.body
+            end
+        end
 
         a.wait(app(scope, receive, send))
 

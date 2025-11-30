@@ -22,7 +22,7 @@ local Parser = {}
 Parser.__index = Parser
 
 --  request-line = method SP request-target SP HTTP-version CRLF
-local REQUEST_LINE_PATTERN = "^(%u+) ([^ ]+) HTTP/([%d.]+)\r\n"
+local REQUEST_LINE_PATTERN = "^(%u+) ([^ ]+) HTTP/([%d.]+)\r\n(.*)"
 
 -- Currrently unsupported: CONNECT, OPTIONS, TRACE
 -- PATCH is defined in RFC 5789
@@ -51,7 +51,7 @@ setmetatable(Parser, {
 --  err: Non-nil if an error exists
 function Parser:parse(data) -- self, data
     local meta = { type = "http" }
-    local method, target, version = string.match(data, REQUEST_LINE_PATTERN)
+    local method, path, version, body = string.match(data, REQUEST_LINE_PATTERN)
     if not method then return nil, nil, ParserErrors.INVALID_REQUEST_LINE end
 
     meta.method = method
@@ -59,15 +59,13 @@ function Parser:parse(data) -- self, data
         return meta, nil, ParserErrors.METHOD_NOT_IMPLEMENTED
     end
 
-    meta.path = target
-    meta.raw_path = target
-
-    meta.http_version = version
+    meta.path = path
+    meta.version = version
     if not tablex.find(SUPPORTED_VERSIONS, version) then
         return meta, nil, ParserErrors.VERSION_NOT_SUPPORTED
     end
 
-    return meta, nil, nil
+    return meta, body, nil
 end
 
 return Parser
