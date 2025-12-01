@@ -6,7 +6,7 @@ local loop = require("libuv")
 local Application = require("alf.application")
 local Response = require("alf.response")
 local Route = require("alf.route")
-local Server = require("alf.server.server")
+local Server = require("alf.server")
 
 ---Sleep current async task until time has elapsed
 ---@param ms number duration in milliseconds

@@ -173,7 +173,7 @@ describe("E2E", function()
         local a = require("async")
         local curl = require("libcurl")
         local loop = require("libuv")
-        local Server = require("alf.server.server")
+        local Server = require("alf.server")
 
         local function test_route()
             return Response("test content")
