@@ -43,6 +43,10 @@ local nextbus = a.sync(function(route, stop)
     return decoded.data[1].attributes.arrival_time:match("T(%d%d:%d%d)")
 end)
 
+local function test(request)
+    return Response("MIKE")
+end
+
 local function home(request)
     local html = { [[
 <html>
@@ -118,13 +122,14 @@ end
 local routes = {
     Route("/", home),
     Route("/arrivals", arrivals),
-    Route("/shutdown", shutdown)
+    Route("/shutdown", shutdown),
+    Route("/test", test, { "POST" })
 }
 local config = { app = Application(routes), host = "127.0.0.1", port = 8080 }
 
 -- open web browser
 local command = jit.os == "OSX" and "open" or jit.os == "Linux" and "termux-open-url" or "echo"
-os.execute(("%s http://%s:%d"):format(command, config.host, config.port))
+--os.execute(("%s http://%s:%d"):format(command, config.host, config.port))
 
 -- run server
 os.exit(main.run(config) and 0 or 1)

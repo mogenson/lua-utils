@@ -126,6 +126,44 @@ describe("Application", function()
 
         app(scope, receive, send)
     end)
+
+    it("should handle a request with a body", function()
+        local route = Route("/echo", function(req)
+            return Response(req.body)
+        end, { "POST" })
+        local app = Application({ route })
+
+        local scope = { method = "POST", path = "/echo" }
+
+        local request_body = "hello from body"
+        local body_sent = false
+        local receive = function()
+            print("Test receive: called, body_sent", body_sent)
+            if not body_sent then
+                body_sent = true
+                print("Test receive: returning body", request_body)
+                return { body = request_body, more_body = false }
+            else
+                print("Test receive: returning no more body")
+                return { more_body = false }
+            end
+        end
+
+        local response_body = ""
+        local send = function(event)
+            print("Test send: event type", event.type)
+            if event.type == "http.response.start" then
+                assert.are.equal(200, event.status)
+            elseif event.type == "http.response.body" then
+                print("Test send: response body chunk", event.body)
+                response_body = response_body .. (event.body or "")
+            end
+        end
+
+        app(scope, receive, send)
+
+        assert.are.equal(request_body, response_body)
+    end)
 end)
 
 describe("E2E", function()

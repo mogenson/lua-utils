@@ -1,7 +1,6 @@
 local a = require("async")
 local loop = require("libuv")
-local Parser = require("alf.server.http_11_parser")
-local ParserErrors = require("alf.server.parser_errors")
+local Parser = require("alf.server.http_parser")
 local http_statuses = require("alf.server.statuses")
 
 local Server = {}
@@ -16,70 +15,63 @@ setmetatable(Server, {
     end
 })
 
-local ASGI_VERSION = { version = "3.0", spec_version = "2.3" }
-
 local write = a.wrap(function(socket, data, cb)
     socket:write(data, cb)
 end)
 
-local read = a.wrap(function(socket, cb)
-    socket:read_start(function(data)
-        socket:read_stop()
-        return cb(data)
-    end)
-end)
-
 local on_connection = a.sync(function(client, app)
-    local data = a.wait(read(client))
-    if data then
-        local parser = Parser()
-        local scope, body, parser_err = parser:parse(data) -- meta, body, parser_err
+    local q = a.queue()
+    client:read_start(function(data) q:put(data) end)
 
-        if parser_err then
-            if parser_err == ParserErrors.INVALID_REQUEST_LINE then
-                a.wait(write(client, "HTTP/1.1 400 Bad Request\r\n\r\n"))
-            elseif parser_err == ParserErrors.METHOD_NOT_IMPLEMENTED then
-                a.wait(write(client, "HTTP/1.1 501 Not Implemented\r\n\r\n"))
-            elseif parser_err == ParserErrors.VERSION_NOT_SUPPORTED then
-                a.wait(write(client, "HTTP/1.1 505 HTTP Version Not Supported\r\n\r\n"))
-            end
-            return
+    local parser = Parser()
+    local read = a.sync(function() return a.wait(q:get()) end)
+    local scope, body, err = a.wait(parser(read))
+
+    if err then
+        if err == Parser.INVALID_REQUEST_LINE then
+            a.wait(write(client, "HTTP/1.1 400 Bad Request\r\n\r\n"))
+        elseif err == Parser.METHOD_NOT_IMPLEMENTED then
+            a.wait(write(client, "HTTP/1.1 501 Not Implemented\r\n\r\n"))
+        elseif err == Parser.VERSION_NOT_SUPPORTED then
+            a.wait(write(client, "HTTP/1.1 505 HTTP Version Not Supported\r\n\r\n"))
         end
-
-        local receive = function()
-            return {
-                type = "http.request",
-                body = body or "",
-                more_body = false,
-            }
-        end
-
-        local response = {}
-        local send = function(event)
-            if event.type == "http.response.start" then
-                response.status = event.status
-                response.headers = event.headers
-            elseif event.type == "http.response.body" then
-                response.body = event.body
-            end
-        end
-
-        a.wait(app(scope, receive, send))
-
-        local wire_response = {
-            "HTTP/1.1 ", http_statuses[response.status or 204], "\r\n",
-            "content-length: " .. #(response.body or {}) .. "\r\n",
-        }
-
-        for _, header in ipairs(response.headers or {}) do
-            table.insert(wire_response, header[1] .. ": " .. header[2] .. "\r\n")
-        end
-
-        table.insert(wire_response, "\r\n")
-        table.insert(wire_response, response.body)
-
-        a.wait(write(client, table.concat(wire_response)))
+        client:close()
+        return
     end
+
+    local receive = function()
+        return {
+            type = "http.request",
+            body = body or "",
+            more_body = false,
+        }
+    end
+
+    local response = {}
+    local send = function(event)
+        if event.type == "http.response.start" then
+            response.status = event.status
+            response.headers = event.headers
+        elseif event.type == "http.response.body" then
+            response.body = event.body
+        end
+    end
+
+    a.wait(app(scope, receive, send))
+
+    local wire_response = {
+        "HTTP/1.1 ", http_statuses[response.status or 204], "\r\n",
+        "content-length: " .. #(response.body or {}) .. "\r\n",
+    }
+
+    for _, header in ipairs(response.headers or {}) do
+        table.insert(wire_response, header[1] .. ": " .. header[2] .. "\r\n")
+    end
+
+    table.insert(wire_response, "\r\n")
+    table.insert(wire_response, response.body)
+
+    a.wait(write(client, table.concat(wire_response)))
 
     client:close()
 end)
