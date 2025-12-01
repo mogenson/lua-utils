@@ -3,7 +3,6 @@ local curl = require("libcurl")
 local json = require("json")
 local loop = require("libuv")
 
-local main = require("alf.server.main")
 local Application = require("alf.application")
 local Response = require("alf.response")
 local Route = require("alf.route")
@@ -111,7 +110,7 @@ Kendall Square
         }))
 
     )
-    return Response(content, "text/plain")
+    return Response(content)
 end
 
 local function shutdown(_)
@@ -125,11 +124,14 @@ local routes = {
     Route("/shutdown", shutdown),
     Route("/test", test, { "POST" })
 }
-local config = { app = Application(routes), host = "127.0.0.1", port = 8080 }
+local app = Application(routes)
+local server = Server(app)
+local host = "127.0.0.1"
+local port = 8000
 
 -- open web browser
 local command = jit.os == "OSX" and "open" or jit.os == "Linux" and "termux-open-url" or "echo"
---os.execute(("%s http://%s:%d"):format(command, config.host, config.port))
+os.execute(("%s http://%s:%d"):format(command, host, port))
 
 -- run server
-os.exit(main.run(config) and 0 or 1)
+os.exit(server(host, port) and 0 or 1)

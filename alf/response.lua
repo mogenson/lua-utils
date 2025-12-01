@@ -16,7 +16,7 @@ setmetatable(Response, {
     ---@return Response
     __call = function(_, content, content_type, status_code, headers)
         content = content or ""
-        content_type = content_type or content:find("<.+>") and "text/plain" or "text/html"
+        content_type = content_type or content:find("<.+>") and "text/html" or "text/plain"
         return setmetatable({
             content = content,
             content_type = content_type,
