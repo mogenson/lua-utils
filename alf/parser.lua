@@ -68,7 +68,7 @@ Parser.__call = a.sync(function(self, read)
         end
     until line == ""                      -- end of metadata
 
-    local body = data:sub(finish + 1)     -- everything after the break is the body
+    local body = data:sub(finish + 1)     -- anything after the break is the body
 
     return meta, body, nil
 end)

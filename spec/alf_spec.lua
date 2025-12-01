@@ -168,6 +168,40 @@ describe("Application", function()
     ]] --
 end)
 
+describe("Parser", function()
+    it("should parse a request in chunks", function()
+        local a = require("async")
+        local Parser = require("alf.parser")
+
+        local function block(future)
+            local results = {}
+            future(function(...) results = table.pack(...) end)
+            return table.unpack(results, 1, results.n)
+        end
+
+        local chunks = {
+            "POST /test HTTP/1.1\r\nHost: localhost\r\n",
+            "Content-Type: text/plain\r\nContent-Length: 13",
+            "\r\n\r\nHello, world!",
+        }
+
+        local read = a.sync(function()
+            return table.remove(chunks, 1)
+        end)
+
+        local parser = Parser()
+        local meta, body = block(parser(read))
+
+        assert.are.equal("POST", meta.method)
+        assert.are.equal("/test", meta.path)
+        assert.are.equal("1.1", meta.version)
+        assert.are.equal("localhost", meta.headers["Host"])
+        assert.are.equal("text/plain", meta.headers["Content-Type"])
+        assert.are.equal("13", meta.headers["Content-Length"])
+        assert.are.equal("Hello, world!", body)
+    end)
+end)
+
 describe("E2E", function()
     it("should start a webapp and fetch content from it", function()
         local a = require("async")
