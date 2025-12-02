@@ -190,15 +190,16 @@ describe("Parser", function()
         end)
 
         local parser = Parser()
-        local meta, body = block(parser(read))
+        local meta, err = block(parser(read))
 
+        assert.is_nil(err)
         assert.are.equal("POST", meta.method)
         assert.are.equal("/test", meta.path)
         assert.are.equal("1.1", meta.version)
         assert.are.equal("localhost", meta.headers["Host"])
         assert.are.equal("text/plain", meta.headers["Content-Type"])
         assert.are.equal("13", meta.headers["Content-Length"])
-        assert.are.equal("Hello, world!", body)
+        assert.are.equal("Hello, world!", meta.body)
     end)
 end)
 
@@ -213,10 +214,10 @@ describe("E2E", function()
             return Response("test content")
         end
 
-        local routes = { Route("/test", test_route), }
+        local routes = { Route("/test", test_route) }
         local app = Application(routes)
         local host = "127.0.0.1"
-        local port = 8080
+        local port = 8000
         local server = Server(app)
 
         -- fetch content

@@ -23,9 +23,11 @@ setmetatable(Application, {
 ---@param receive function
 ---@param send function
 Application.__call = a.sync(function(self, scope, receive, send)
-    -- TODO: When is this supposed to be called?
-    -- What happens on a request with no body?
-    local _ = receive() -- event
+    -- read the rest of the body, if needed
+    local content_length = tonumber(scope.headers["Content-Length"] or 0)
+    while #scope.body < content_length do
+        scope.body = scope.body .. a.wait(receive())
+    end
 
     local match, route = self.router:route(scope.method, scope.path)
 

@@ -100,8 +100,8 @@ local on_connection = a.sync(function(client, app)
     client:read_start(function(data) q:put(data) end)
 
     local parser = Parser()
-    local read = a.sync(function() return a.wait(q:get()) end)
-    local scope, body, err = a.wait(parser(read))
+    local receive = a.sync(function() return a.wait(q:get()) end)
+    local scope, err = a.wait(parser(receive))
 
     if err then
         if err == Parser.INVALID_REQUEST_LINE then
@@ -113,14 +113,6 @@ local on_connection = a.sync(function(client, app)
         end
         client:close()
         return
-    end
-
-    local receive = function()
-        return {
-            type = "http.request",
-            body = body or "",
-            more_body = false,
-        }
     end
 
     local response = {}
