@@ -38,21 +38,21 @@ Parser.VERSION_NOT_SUPPORTED = 3
 ---@return table request metadata
 ---@return number|nil parsing error
 Parser.__call = a.sync(function(self, receive)
-    local meta = { headers = {} }
+    local scope = { headers = {} }
     local data = a.wait(receive())
 
     local start, finish, method, path, version = data:find(REQUEST_LINE_PATTERN)
-    if not method then return meta, self.INVALID_REQUEST_LINE end
+    if not method then return scope, self.INVALID_REQUEST_LINE end
 
-    meta.method = method
+    scope.method = method
     if not tablex.find(SUPPORTED_METHODS, method) then
-        return meta, self.METHOD_NOT_IMPLEMENTED
+        return scope, self.METHOD_NOT_IMPLEMENTED
     end
 
-    meta.path = path
-    meta.version = version
+    scope.path = path
+    scope.version = version
     if not tablex.find(SUPPORTED_VERSIONS, version) then
-        return meta, self.VERSION_NOT_SUPPORTED
+        return scope, self.VERSION_NOT_SUPPORTED
     end
 
     local index, line = finish + 1, nil
@@ -61,15 +61,15 @@ Parser.__call = a.sync(function(self, receive)
         start, finish, line = data:find("(.-)\r\n", index) -- parse line by line
         if line then
             local key, value = line:match("^(.-):%s*(.*)$")
-            if key and value then meta.headers[key] = value end
+            if key and value then scope.headers[key] = value end
         else
             data = data .. a.wait(receive()) -- read more data
         end
     until line == ""                      -- end of metadata
 
-    meta.body = data:sub(finish + 1)     -- anything after the break is the body
+    scope.body = data:sub(finish + 1)     -- anything after the break is the body
 
-    return meta, nil
+    return scope, nil
 end)
 
 return Parser
