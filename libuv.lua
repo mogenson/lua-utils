@@ -166,7 +166,6 @@ ffi.cdef([[
     typedef void (*uv_close_cb)(uv_handle_t *handle);
 
     const char *uv_handle_type_name(uv_handle_type type);
-    int uv_is_active(const uv_handle_t *handle);
     int uv_is_closing(const uv_handle_t *handle);
     uv_handle_type uv_handle_get_type(const uv_handle_t *handle);
     void uv_close(uv_handle_t *handle, uv_close_cb close_cb);
@@ -190,16 +189,16 @@ end
 ---Close a libuv handle
 ---@param self ffi.cdata
 function Handle:close()
-    libuv.uv_close(cast("uv_handle_t*", self), close_cb)
+    local handle = cast("uv_handle_t*", self)
+    if libuv.uv_is_closing(handle) == 0 then
+        libuv.uv_close(handle, close_cb)
+    end
 end
 
 ---This is the garbage collection metamethod for libuv handles.
 ---@param self ffi.cdata*
 function Handle:__gc()
-    local handle = cast("uv_handle_t*", self)
-    if libuv.uv_is_active(handle) > 0 and libuv.uv_is_closing(handle) == 0 then
-        self:close()
-    end
+    self:close()
 end
 
 ffi.cdef([[
@@ -246,9 +245,7 @@ end
 function Loop:shutdown()
     libuv.uv_stop(self)
     libuv.uv_walk(self, cast("uv_walk_cb", function(handle, arg)
-        if libuv.uv_is_closing(handle) == 0 then
-            libuv.uv_close(handle, close_cb);
-        end
+        Handle.close(handle)
     end), nil)
     libuv.uv_run(self, libuv.UV_RUN_ONCE)
 end

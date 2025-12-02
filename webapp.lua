@@ -42,10 +42,6 @@ local nextbus = a.sync(function(route, stop)
     return decoded.data[1].attributes.arrival_time or "X"
 end)
 
-local function test(request)
-    return Response("MIKE")
-end
-
 local function home(request)
     local html = { [[
 <html>
@@ -132,15 +128,19 @@ As of: %2d:%02d
 end
 
 local function shutdown(_)
-    loop:timer():start(100, function() loop:shutdown() end)
-    return Response()
+    return setmetatable({ response = Response(), }, {
+        __call = function(self, send)
+            self.response(send)
+            print("goodbye")
+            loop:shutdown() -- shutdown after response is sent
+        end
+    })
 end
 
 local routes = {
     Route("/", home),
     Route("/arrivals", arrivals),
     Route("/shutdown", shutdown),
-    Route("/test", test, { "POST" })
 }
 local app = Application(routes)
 local server = Server(app)
