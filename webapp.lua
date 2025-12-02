@@ -39,7 +39,7 @@ local nextbus = a.sync(function(route, stop)
     local url = "https://api-v3.mbta.com/predictions?page[limit]=1&filter[route]=%s&filter[stop]=%d"
     local encoded = a.wait(fetch(url:format(route, stop)))
     local decoded = json.decode(encoded)
-    return decoded.data[1].attributes.arrival_time:match("T(%d%d:%d%d)")
+    return decoded.data[1].attributes.arrival_time or "X"
 end)
 
 local function test(request)
@@ -86,30 +86,48 @@ document.getElementById('refresh_button').click()
 end
 
 local function arrivals(request)
+    local times = table.pack(a.wait(a.gather({
+        -- Teele Square
+        nextbus("87", 2576),
+        nextbus("88", 2576),
+        -- Davis Square
+        nextbus("87", 5104),
+        nextbus("88", 5104),
+        nextbus("Red", 70063),
+        -- Kendall Square
+        nextbus("Red", 70072)
+    })))
+
+    local date = os.date("*t")
+    print(("now: %d:%d:%d"):format(date.hour, date.min, date.sec))
+    local now = (date.hour * 3600) + (date.min * 60) + date.sec
+
+    for i, time in ipairs(times) do
+        print(i, time)
+        local hour, min, sec = time:match("T(%d%d):(%d%d):(%d%d)")
+        if hour and min and sec then
+            hour, min, sec = tonumber(hour), tonumber(min), tonumber(sec)
+            times[i] = math.floor(math.max((((hour * 3600) + (min * 60) + sec - now) / 60), 0))
+        end
+    end
+
+    table.insert(times, date.hour)
+    table.insert(times, date.min)
+
     local content = ([[
 Teele Square
-    87 bus: %s
-    88 bus: %s
+    87 bus: %s min
+    88 bus: %s min
 Davis Square
-    87 bus: %s
-    88 bus: %s
-    Red line: %s
+    87 bus: %s min
+    88 bus: %s min
+    Red line: %s min
 Kendall Square
-    Red line: %s
-    ]]):format(
-        a.wait(a.gather({
-            -- Teele Square
-            nextbus("87", 2576),
-            nextbus("88", 2576),
-            -- Davis Square
-            nextbus("87", 5104),
-            nextbus("88", 5104),
-            nextbus("Red", 70063),
-            -- Kendall Square
-            nextbus("Red", 70072)
-        }))
+    Red line: %s min
 
-    )
+As of: %2d:%02d
+    ]]):format(table.unpack(times))
+
     return Response(content)
 end
 
