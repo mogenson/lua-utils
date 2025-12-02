@@ -42,6 +42,10 @@ local nextbus = a.sync(function(route, stop)
     return decoded.data[1].attributes.arrival_time or "X"
 end)
 
+
+---Generate HTML home page
+---@param request Request
+---@return Response
 local function home(request)
     local html = { [[
 <html>
@@ -81,6 +85,9 @@ document.getElementById('refresh_button').click()
     return Response(table.concat(html, "\r\n"))
 end
 
+---Return bus arrivals
+---@param request Request
+---@return Response
 local function arrivals(request)
     local times = table.pack(a.wait(a.gather({
         -- Teele Square
@@ -127,7 +134,10 @@ As of: %2d:%02d
     return Response(content)
 end
 
-local function shutdown(_)
+---Shutdown the server
+---@param request Request
+---@return Response
+local function shutdown(request)
     return setmetatable({ response = Response(), }, {
         __call = function(self, send)
             self.response(send)

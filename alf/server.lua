@@ -23,9 +23,16 @@ local function load_app(app)
     end
 end
 
+---@class TCP
+---@field bind function
+---@field listen function
+---@field accept function
+---@field write function
+---@field read_start function
+
 ---@class Server
 ---@field app Application
----@field server ffi.cdata*
+---@field tcp TCP
 local Server = {}
 Server.__index = Server
 
@@ -36,7 +43,7 @@ setmetatable(Server, {
     __call = function(_, app)
         return setmetatable({
             app = load_app(app),
-            server = nil
+            tcp = nil
         }, Server)
     end
 })
@@ -72,12 +79,12 @@ end)
 ---@param port number
 ---@return boolean true if there are no active handles on stop
 function Server.__call(self, host, port)
-    self.server = loop:tcp()
-    self.server:bind(host, port)
+    self.tcp = loop:tcp()
+    self.tcp:bind(host, port)
 
-    self.server:listen(1, function()
+    self.tcp:listen(1, function()
         local client = loop:tcp()
-        self.server:accept(client)
+        self.tcp:accept(client)
         a.run(on_connection(client, self.app))
     end)
 
