@@ -186,12 +186,18 @@ function Handle.__tostring(self)
     return string.format("%s: %d", ffi.string(libuv.uv_handle_type_name(id)), address(self))
 end
 
+---Check if a libuv handle is closed
+---@param self ffi.cdata
+---@return boolean
+function Handle:closed()
+    return libuv.uv_is_closing(cast("uv_handle_t*", self)) ~= 0
+end
+
 ---Close a libuv handle
 ---@param self ffi.cdata
 function Handle:close()
-    local handle = cast("uv_handle_t*", self)
-    if libuv.uv_is_closing(handle) == 0 then
-        libuv.uv_close(handle, close_cb)
+    if not self:closed() then
+        libuv.uv_close(cast("uv_handle_t*", self), close_cb)
     end
 end
 

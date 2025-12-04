@@ -5,37 +5,20 @@ local loop = require("libuv")
 describe("libcurl", function()
     it("multi", function()
         local url = "http://httpbin.org/get"
-        local q1 = a.queue()
-        local q2 = a.queue()
+        local fetch = a.wrap(function(url, cb)
+            curl.GET(url, cb)
+        end)
 
-        curl:get(url,
-            function(str) q1:put(str) end,
-            function(result)
-                assert(result == 0)
-                q1:put(nil)
-            end
-        )
+        local get1 = a.sync(function(url)
+            return a.wait(fetch(url))
+        end)
 
-        curl:get(url,
-            function(str) q2:put(str) end,
-            function(result)
-                assert(result == 0)
-                q2:put(nil)
-            end
-        )
-
-        local collector = a.sync(function(q)
-            local vals, val = {}, nil
-            repeat
-                val = a.wait(q:get())
-                table.insert(vals, val)
-            until not val
-            print() -- force jit off
-            return table.concat(vals)
+        local get2 = a.sync(function(url)
+            return a.wait(fetch(url))
         end)
 
         local main = a.sync(function()
-            return a.wait(a.gather({ collector(q1), collector(q2) }))
+            return a.wait(a.gather({ get1(url), get1(url) }))
         end)
 
         local response1, response2 = "", ""
@@ -48,5 +31,24 @@ describe("libcurl", function()
 
         assert.are.same("string", type(response2))
         assert.are.same(expected, response2:sub(- #expected))
+    end)
+
+    it("post", function()
+        local url = "http://httpbin.org/post"
+        local post = a.wrap(function(url, data, cb)
+            curl.POST(url, data, cb)
+        end)
+
+        local content = "Hello World"
+        local main = a.sync(function()
+            return a.wait(post(url, content))
+        end)
+
+        local response
+        a.run(main(), function(...) response = ... end)
+        loop:run()
+
+        assert.are.same("string", type(response))
+        assert.is_not_nil(response:find(content))
     end)
 end)
