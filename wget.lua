@@ -1,18 +1,17 @@
 local loop = require("libuv")
 local curl = require("libcurl")
 
-
 for i, url in ipairs(arg) do
     local name = i .. ".download"
-    print(string.format("Downloading %s as %s", url, name))
-    local file = assert(io.open(i .. ".download", "w"))
-    curl:get(url,
-        function(data)
-            file:write(data)
-        end,
-        function(result)
-            print(string.format("%s finished with status: %d", name, result))
-            file:close()
+    print(("Downloading %s as %s"):format(url, name))
+    curl.GET(url,
+        function(data, err)
+            if data then
+                assert(io.open(i .. ".download", "w")):write(data):close()
+                print(("%s finished"):format(name))
+            elseif err then
+                print(("Error: %s"):format(err))
+            end
         end
     )
 end

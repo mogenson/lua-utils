@@ -1,7 +1,13 @@
+local a = require("async")
+local Application = require("alf.application")
+local curl = require("libcurl")
+local loop = require("libuv")
+local Parser = require("alf.parser")
 local Response = require("alf.response")
 local Route = require("alf.route")
 local Router = require("alf.router")
-local Application = require("alf.application")
+local Server = require("alf.server")
+
 
 describe("Router", function()
     it("should match a simple route", function()
@@ -126,59 +132,10 @@ describe("Application", function()
 
         app(scope, receive, send)
     end)
-
-    --[[
-    it("should handle a request with a body", function()
-        local route = Route("/echo", function(req)
-            return Response(req.body)
-        end, { "POST" })
-        local app = Application({ route })
-
-        local scope = { method = "POST", path = "/echo" }
-
-        local request_body = "hello from body"
-        local body_sent = false
-        local receive = function()
-            print("Test receive: called, body_sent", body_sent)
-            if not body_sent then
-                body_sent = true
-                print("Test receive: returning body", request_body)
-                return { body = request_body, more_body = false }
-            else
-                print("Test receive: returning no more body")
-                return { more_body = false }
-            end
-        end
-
-        local response_body = ""
-        local send = function(event)
-            print("Test send: event type", event.type)
-            if event.type == "http.response.start" then
-                assert.are.equal(200, event.status)
-            elseif event.type == "http.response.body" then
-                print("Test send: response body chunk", event.body)
-                response_body = response_body .. (event.body or "")
-            end
-        end
-
-        app(scope, receive, send)
-
-        assert.are.equal(request_body, response_body)
-    end)
-    ]] --
 end)
 
 describe("Parser", function()
     it("should parse a request in chunks", function()
-        local a = require("async")
-        local Parser = require("alf.parser")
-
-        local function block(future)
-            local results = {}
-            future(function(...) results = table.pack(...) end)
-            return table.unpack(results, 1, results.n)
-        end
-
         local chunks = {
             "POST /test HTTP/1.1\r\nHost: localhost\r\n",
             "Content-Type: text/plain\r\nContent-Length: 13",
@@ -190,7 +147,7 @@ describe("Parser", function()
         end)
 
         local parser = Parser()
-        local scope, err = block(parser(read))
+        local scope, err = a.block(parser(read))
 
         assert.is_nil(err)
         assert.are.equal("POST", scope.method)
@@ -205,16 +162,11 @@ end)
 
 describe("E2E", function()
     it("should start a webapp and fetch content from it", function()
-        local a = require("async")
-        local curl = require("libcurl")
-        local loop = require("libuv")
-        local Server = require("alf.server")
-
-        local function test_route()
+        local function test()
             return Response("test content")
         end
 
-        local routes = { Route("/test", test_route) }
+        local routes = { Route("/test", test) }
         local app = Application(routes)
         local host = "127.0.0.1"
         local port = 8000
@@ -222,13 +174,43 @@ describe("E2E", function()
 
         -- fetch content
         local content = {}
-        curl:get(("http://%s:%d/test"):format(host, port),
-            function(data) table.insert(content, data) end,
-            function(_) loop:shutdown() end
+        curl.GET(("http://%s:%d/test"):format(host, port),
+            function(data, err)
+                assert(not err)
+                table.insert(content, data)
+                loop:shutdown()
+            end
         )
 
         server(host, port)
 
         assert.are.equal("test content", table.concat(content))
+    end)
+
+    it("should start a webapp and post content to it", function()
+        local function echo(request)
+            return Response(request.scope.body)
+        end
+
+        local routes = { Route("/echo", echo, { "POST" }) }
+        local app = Application(routes)
+        local host = "127.0.0.1"
+        local port = 8000
+        local server = Server(app)
+
+        -- fetch content
+        local request_content = "Hello, World"
+        local response_content = {}
+        curl.POST(("http://%s:%d/echo"):format(host, port), request_content,
+            function(data, err)
+                assert(not err)
+                table.insert(response_content, data)
+                loop:shutdown()
+            end
+        )
+
+        server(host, port)
+
+        assert.are.equal(request_content, table.concat(response_content))
     end)
 end)

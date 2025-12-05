@@ -97,6 +97,15 @@ local function run(future, cb)
     future(cb)
 end
 
+---Execute of a future and collect the results. This function will block.
+---@param future function a future to run
+---@return ... a variadic list of results
+local function block(future)
+    local results = {}
+    run(future, function(...) results = table.pack(...) end)
+    return table.unpack(results, 1, results.n)
+end
+
 ---Returns an async queue.
 -- It has regular put method and an async get method that can be awaited.
 ---@return table
@@ -124,6 +133,11 @@ local function queue()
                 table.insert(self.q, value)
             end
         end,
+        iter = function(self)
+            return function()
+                return await(self:get())
+            end
+        end
     }
 end
 
@@ -164,6 +178,7 @@ return {
     gather = gather,
     select = select,
     run = run,
+    block = block,
 
     queue = queue,
     channel = channel,

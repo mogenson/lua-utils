@@ -10,25 +10,16 @@ local Server = require("alf.server")
 
 ---Sleep current async task until time has elapsed
 ---@param ms number duration in milliseconds
----@param cb function completion callback
+---@param cb fun()
 local sleep = a.wrap(function(ms, cb)
     loop:timer():start(ms, cb)
 end)
 
 ---Perform an HTTP GET request for remote URL
 ---@param url string
----@return string content
-local fetch = a.sync(function(url)
-    local q = a.queue()
-    curl:get(url,
-        function(str) q:put(str) end,
-        function(result) q:put(nil) end)
-    local content, chunk = {}, nil
-    repeat
-        chunk = a.wait(q:get())
-        table.insert(content, chunk)
-    until not chunk
-    return table.concat(content)
+---@param cb fun(data: string|nil, err: string|nil)
+local fetch = a.wrap(function(url, cb)
+    curl.GET(url, cb)
 end)
 
 ---Fetch next arrival time
