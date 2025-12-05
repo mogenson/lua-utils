@@ -18,7 +18,7 @@ assert(serial_in:open(read_fd))
 local serial_out = uv.new_pipe()
 serial_out:open(write_fd)
 
-function quit()
+local function quit()
     print("quitting...")
     stdin:set_mode(0)
     serial_in:close()

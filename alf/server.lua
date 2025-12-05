@@ -23,16 +23,9 @@ local function load_app(app)
     end
 end
 
----@class TCP
----@field bind function
----@field listen function
----@field accept function
----@field write function
----@field read_start function
-
 ---@class Server
 ---@field app Application
----@field tcp TCP
+---@field tcp Tcp
 local Server = {}
 Server.__index = Server
 
@@ -89,7 +82,7 @@ function Server.__call(self, host, port)
     end)
 
     -- register SIGINT / Ctrl-C handler
-    loop:signal():start(2, function(signum)
+    loop:signal():start(2, function(signum) ---@diagnostic disable-line:unused-local
         loop:shutdown()
     end)
 
