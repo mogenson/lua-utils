@@ -72,15 +72,6 @@ ffi.cdef([[
 ---@alias curlm cdata
 ---@alias callback fun(data: string|nil, err: string|nil)
 
----@class poll
----@field start fun(self: poll, events: number, callback: fun(events: number))
----@field stop fun(self: poll)
-
----@class timer
----@field start fun(self: timer, ms: number, callback: fun())
----@field stop fun(self: timer)
----@field closed fun(self: timer): boolean
-
 ---@class cache
 ---@field data string[]
 ---@field callback callback
@@ -113,8 +104,8 @@ end
 
 local curl = {
     multi = assert(libcurl.curl_multi_init()), ---@type curlm
-    polls = {}, ---@type { [number]: poll }
-    timer = loop:timer(), ---@type timer
+    polls = {}, ---@type { [number]: Poll }
+    timer = loop:timer(), ---@type Timer
     handles = {} ---@type { [number]: cache }
 }
 
@@ -136,7 +127,7 @@ libcurl.curl_multi_setopt(curl.multi, libcurl.CURLMOPT_SOCKETFUNCTION,
     ---@param fd number
     ---@param action number
     ---@return number
-    cast("socket_callback", function(handle, fd, action)
+    cast("socket_callback", function(handle, fd, action) ---@diagnostic disable-line:unused-local
         curl.timer:stop()
 
         --- This function is called by libuv when a socket is ready for reading or writing.
