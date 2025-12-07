@@ -3,6 +3,9 @@ local curl = require("libcurl")
 local json = require("json")
 local loop = require("libuv")
 
+local List = require("pl.List")
+local operator = require("pl.operator")
+
 local Application = require("alf.application")
 local Response = require("alf.response")
 local Route = require("alf.route")
@@ -11,7 +14,7 @@ local Server = require("alf.server")
 ---Sleep current async task until time has elapsed
 ---@param ms number duration in milliseconds
 ---@param cb fun()
-local sleep = a.wrap(function(ms, cb)
+local sleep = a.wrap(function(ms, cb) ---@diagnostic disable-line:unused-local
     loop:timer():start(ms, cb)
 end)
 
@@ -26,18 +29,25 @@ end)
 ---@param route string name of the mbta route
 ---@param stop number id of mbta stop
 ---@return string arrival time
-local nextbus = a.sync(function(route, stop)
+local eta = a.sync(function(route, stop)
     local url = "https://api-v3.mbta.com/predictions?page[limit]=1&filter[route]=%s&filter[stop]=%d"
-    local encoded = a.wait(fetch(url:format(route, stop)))
-    local decoded = json.decode(encoded)
-    return decoded.data[1].attributes.arrival_time or "X"
+    return a.wait(fetch(url:format(route, stop)))
 end)
 
+---Convert a timestamp string to number of seconds since midnight
+---@param timestamp string
+---@return number
+local function to_seconds(timestamp)
+    local h, m, s = timestamp:match("T(%d%d):(%d%d):(%d%d)")
+    h, m, s = tonumber(h), tonumber(m), tonumber(s)
+    if not (h and m and s) then return math.huge end
+    return (h * 3600) + (m * 60) + s
+end
 
 ---Generate HTML home page
 ---@param request Request
 ---@return Response
-local function home(request)
+local function home(request) ---@diagnostic disable-line:unused-local
     local html = { [[
 <html>
 <head>
@@ -79,36 +89,11 @@ end
 ---Return bus arrivals
 ---@param request Request
 ---@return Response
-local function arrivals(request)
-    local times = table.pack(a.wait(a.gather({
-        -- Teele Square
-        nextbus("87", 2576),
-        nextbus("88", 2576),
-        -- Davis Square
-        nextbus("87", 5104),
-        nextbus("88", 5104),
-        nextbus("Red", 70063),
-        -- Kendall Square
-        nextbus("Red", 70072)
-    })))
-
+local function arrivals(request) ---@diagnostic disable-line:unused-local
     local date = os.date("*t")
-    print(("now: %d:%d:%d"):format(date.hour, date.min, date.sec))
     local now = (date.hour * 3600) + (date.min * 60) + date.sec
 
-    for i, time in ipairs(times) do
-        print(i, time)
-        local hour, min, sec = time:match("T(%d%d):(%d%d):(%d%d)")
-        if hour and min and sec then
-            hour, min, sec = tonumber(hour), tonumber(min), tonumber(sec)
-            times[i] = math.floor(math.max((((hour * 3600) + (min * 60) + sec - now) / 60), 0))
-        end
-    end
-
-    table.insert(times, date.hour)
-    table.insert(times, date.min)
-
-    local content = ([[
+    return Response(([[
 Teele Square
     87 bus: %s min
     88 bus: %s min
@@ -119,16 +104,33 @@ Davis Square
 Kendall Square
     Red line: %s min
 
-As of: %2d:%02d
-    ]]):format(table.unpack(times))
-
-    return Response(content)
+As of: %2d:%02d]]):format(table.unpack(
+        List(table.pack(a.wait(a.gather({
+            -- Teele Square
+            eta("87", 2576),
+            eta("88", 2576),
+            -- Davis Square
+            eta("87", 5104),
+            eta("88", 5104),
+            eta("Red", 70063),
+            -- Kendall Square
+            eta("Red", 70072)
+        }))))
+        :map(json.decode)
+        :map(function(data) return data.data[1].attributes.arrival_time or "" end)
+        :map(to_seconds)
+        :map(operator.sub, now)
+        :map(operator.div, 60)
+        :map(math.max, 0)
+        :map(math.floor)
+        :append(date.hour)
+        :append(date.min))))
 end
 
 ---Shutdown the server
 ---@param request Request
 ---@return Response
-local function shutdown(request)
+local function shutdown(request) ---@diagnostic disable-line:unused-local
     return setmetatable({ response = Response(), }, {
         __call = function(self, send)
             self.response(send)

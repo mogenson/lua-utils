@@ -18,7 +18,6 @@ setmetatable(Router, {
 ---@param path string An HTTP request path
 ---@return boolean|nil, Route|nil
 function Router:route(method, path)
-    local method_not_allowed_route = nil
     for _, route in ipairs(self.routes) do
         local match = route:matches(method, path)
         if match ~= nil then return match, route end

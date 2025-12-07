@@ -41,7 +41,7 @@ Parser.__call = a.sync(function(self, receive)
     local scope = { headers = {} }
     local data = a.wait(receive())
 
-    local start, finish, method, path, version = data:find(REQUEST_LINE_PATTERN)
+    local _, finish, method, path, version = data:find(REQUEST_LINE_PATTERN)
     if not method then return scope, self.INVALID_REQUEST_LINE end
 
     scope.method = method
@@ -58,16 +58,16 @@ Parser.__call = a.sync(function(self, receive)
     local index, line = finish + 1, nil
     repeat
         if finish then index = finish + 1 end
-        start, finish, line = data:find("(.-)\r\n", index) -- parse line by line
+        _, finish, line = data:find("(.-)\r\n", index) -- parse line by line
         if line then
             local key, value = line:match("^(.-):%s*(.*)$")
             if key and value then scope.headers[key] = value end
         else
             data = data .. a.wait(receive()) -- read more data
         end
-    until line == ""                      -- end of metadata
+    until line == ""                         -- end of metadata
 
-    scope.body = data:sub(finish + 1)     -- anything after the break is the body
+    scope.body = data:sub(finish + 1)        -- anything after the break is the body
 
     return scope, nil
 end)
