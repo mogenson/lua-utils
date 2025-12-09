@@ -1,3 +1,4 @@
+local class = require("pl.class")
 local stringx = require("pl.stringx")
 
 -- Converter is not optional!
@@ -58,34 +59,25 @@ end
 ---@field controller function
 ---@field methods string[] list of supported HTTP methods
 ---@field converters string[]
-local Route = {}
-Route.__index = Route
+local Route = class()
 
-setmetatable(Route, {
-    ---A route to an individual controller
-    ---A route is used to connect an incoming request to the responsible controller.
-    ---@param path string A path template
-    ---@param controller function A controller function
-    ---@param methods string[] A list of methods that the controller can handle (default: {"GET"})
-    ---@return Route
-    __call = function(_, path, controller, methods)
-        local self = setmetatable({}, Route)
-
-        self.path = path
-        self.path_pattern, self.converters = make_path_matcher(path)
-        self.controller = controller
-        self.methods = methods or { "GET" }
-
-        return self
-    end
-})
+---A route to an individual controller
+---A route is used to connect an incoming request to the responsible controller.
+---@param path string A path template
+---@param controller function A controller function
+---@param methods string[] A list of methods that the controller can handle (default: {"GET"})
+function Route:_init(path, controller, methods)
+    self.path = path
+    self.path_pattern, self.converters = make_path_matcher(path)
+    self.controller = controller
+    self.methods = methods or { "GET" }
+end
 
 ---Check if the route matches the method and path
----@param self Route
 ---@param method string An HTTP method, uppercased
 ---@param path string An HTTP request path
 ---@return boolean|nil true if path and method match, false if only path matches, nil for no match
-function Route.matches(self, method, path)
+function Route:matches(method, path)
     if not string.match(path, self.path_pattern) then return nil end -- no match
 
     for _, allowed_method in ipairs(self.methods) do
@@ -96,10 +88,9 @@ function Route.matches(self, method, path)
 end
 
 ---Route a request to a controller.
----@param self Route
 ---@param request Request
 ---@return Response
-function Route.run(self, request)
+function Route:run(request)
     local raw_parameters = table.pack(string.match(request.path, self.path_pattern))
 
     local transformer

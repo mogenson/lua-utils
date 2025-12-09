@@ -1,17 +1,15 @@
+local class = require("pl.class")
+
 ---@class Router
 ---@field routes Route[]
-local Router = {}
-Router.__index = Router
+local Router = class()
 
-setmetatable(Router, {
-    ---A collection of ordered routes
-    ---The router is responsible for finding a route that matches a URL path.
-    ---@param routes string[] A list of routes to check against
-    ---@return Router
-    __call = function(_, routes)
-        return setmetatable({ routes = routes }, Router)
-    end
-})
+---A collection of ordered routes
+---The router is responsible for finding a route that matches a URL path.
+---@param routes string[] A list of routes to check against
+function Router:_init(routes)
+    self.routes = routes
+end
 
 ---Find a route that maches an HTTP method and path
 ---@param method string An HTTP method

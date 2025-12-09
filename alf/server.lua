@@ -1,7 +1,10 @@
 local a = require("async")
 local loop = require("libuv")
-local Parser = require("alf.parser")
+
+local class = require("pl.class")
 local utils = require("pl.utils")
+
+local Parser = require("alf.parser")
 
 ---Helper utility to load Lua module from path
 ---@param app string|Application path to require app or Application
@@ -22,24 +25,6 @@ local function load_app(app)
         error(("Invalid app type: %s"):format(app_type))
     end
 end
-
----@class Server
----@field app Application
----@field tcp Tcp
-local Server = {}
-Server.__index = Server
-
-setmetatable(Server, {
-    ---Create an HTTP web server
-    ---@param app string|Application
-    ---@return Server
-    __call = function(_, app)
-        return setmetatable({
-            app = load_app(app),
-            tcp = nil
-        }, Server)
-    end
-})
 
 local on_connection = a.sync(function(client, app)
     local q = a.queue()
@@ -66,12 +51,23 @@ local on_connection = a.sync(function(client, app)
     client:close()
 end)
 
+---@class Server
+---@field app Application
+---@field tcp Tcp
+local Server = class()
+
+---Create an HTTP web server
+---@param app string|Application
+function Server:_init(app)
+    self.app = load_app(app)
+    self.tcp = nil
+end
+
 ---Start the server and run the libuv loop
----@param self Server
 ---@param host string
 ---@param port number
 ---@return boolean true if there are no active handles on stop
-function Server.__call(self, host, port)
+function Server:__call(host, port)
     self.tcp = loop:tcp()
     self.tcp:bind(host, port)
 
