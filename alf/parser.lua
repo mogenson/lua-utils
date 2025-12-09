@@ -2,6 +2,8 @@ local a = require("async")
 local class = require("pl.class")
 local tablex = require("pl.tablex")
 
+local Scope = require("alf.scope")
+
 --  request-line = method SP request-target SP HTTP-version CRLF
 local REQUEST_LINE_PATTERN = "^(%u+) ([^ ]+) HTTP/([%d.]+)\r\n"
 
@@ -30,10 +32,10 @@ Parser.VERSION_NOT_SUPPORTED = 3
 ---Parse an HTTP requst string
 ---@param self Parser
 ---@param receive function an async function that returns data
----@return table request metadata
+---@return Scope request metadata
 ---@return number|nil parsing error
 Parser.__call = a.sync(function(self, receive)
-    local scope = { headers = {} }
+    local scope = Scope()
     local data = a.wait(receive())
 
     local _, finish, method, path, version = data:find(REQUEST_LINE_PATTERN)

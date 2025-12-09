@@ -17,7 +17,7 @@ end
 
 ---An async entrypoint into the Application
 ---@param self Application
----@param scope table
+---@param scope Scope
 ---@param receive function async ASGI callable
 ---@param send function async ASGI callable
 Application.__call = a.sync(function(self, scope, receive, send)
