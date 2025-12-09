@@ -1,25 +1,23 @@
 local a = require("async")
+local class = require("pl.class")
+
 local Request = require("alf.request")
 local Response = require("alf.response")
 local Router = require("alf.router")
 
 ---@class Application
 ---@field router Router
-local Application = {}
-Application.__index = Application
+local Application = class()
 
-setmetatable(Application, {
-    ---An ASGI application
-    ---@param routes Route[]
-    ---@return Application
-    __call = function(_, routes)
-        return setmetatable({ router = Router(routes) }, Application)
-    end
-})
+---An ASGI application
+---@param routes Route[]
+function Application:_init(routes)
+    self.router = Router(routes)
+end
 
 ---An async entrypoint into the Application
 ---@param self Application
----@param scope table
+---@param scope Scope
 ---@param receive function async ASGI callable
 ---@param send function async ASGI callable
 Application.__call = a.sync(function(self, scope, receive, send)
@@ -43,6 +41,5 @@ Application.__call = a.sync(function(self, scope, receive, send)
 
     response(send)
 end)
-
 
 return Application

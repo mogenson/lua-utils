@@ -1,9 +1,8 @@
 local a = require("async")
+local class = require("pl.class")
 local tablex = require("pl.tablex")
 
----@class Parser
-local Parser = {}
-Parser.__index = Parser
+local Scope = require("alf.scope")
 
 --  request-line = method SP request-target SP HTTP-version CRLF
 local REQUEST_LINE_PATTERN = "^(%u+) ([^ ]+) HTTP/([%d.]+)\r\n"
@@ -15,13 +14,11 @@ local SUPPORTED_METHODS = { "GET", "POST", "HEAD", "DELETE", "PUT", "PATCH" }
 -- These are the versions supported by ASGI HTTP 2.3.
 local SUPPORTED_VERSIONS = { "1.0", "1.1", "2" }
 
-setmetatable(Parser, {
-    ---An HTTP 1.1 parser
-    ---@return Parser
-    __call = function(_)
-        return setmetatable({}, Parser)
-    end
-})
+---@class Parser An HTTP 1.1 Parser
+---@field INVALID_REQUEST_LINE number
+---@field METHOD_NOT_IMPLEMENTED number
+---@field VERSION_NOT_SUPPORTED number
+local Parser = class()
 
 -- Errors
 
@@ -35,10 +32,10 @@ Parser.VERSION_NOT_SUPPORTED = 3
 ---Parse an HTTP requst string
 ---@param self Parser
 ---@param receive function an async function that returns data
----@return table request metadata
+---@return Scope request metadata
 ---@return number|nil parsing error
 Parser.__call = a.sync(function(self, receive)
-    local scope = { headers = {} }
+    local scope = Scope()
     local data = a.wait(receive())
 
     local _, finish, method, path, version = data:find(REQUEST_LINE_PATTERN)

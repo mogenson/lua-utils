@@ -1,4 +1,5 @@
 local a = require("async")
+local class = require("pl.class")
 
 local http_status = {
     -- 1xx - https://httpwg.org/specs/rfc7231.html#status.1xx
@@ -55,29 +56,23 @@ local http_status = {
 ---@field headers {[string]: string}[]
 ---@field status_code number
 ---@field content string
-local Response = {}
-Response.__index = Response
+local Response = class()
 
-setmetatable(Response, {
-    ---An HTTP response
-    ---@param content string The content to return over the wire (default: "")
-    ---@param content_type string The type of content data (default: "text/html")
-    ---@param status_code number The status code (default: 200)
-    ---@param headers table HTTP headers (default: {})
-    ---@return Response
-    __call = function(_, content, content_type, status_code, headers)
-        return setmetatable({
-            content = content or "",
-            content_type = content_type,
-            status_code = status_code or 200,
-            headers = headers or {},
-        }, Response)
-    end
-})
+---An HTTP response
+---@param content string The content to return over the wire (default: "")
+---@param content_type string The type of content data (default: "text/html")
+---@param status_code number The status code (default: 200)
+---@param headers table HTTP headers (default: {})
+function Response:_init(content, content_type, status_code, headers)
+    self.content = content or ""
+    self.content_type = content_type
+    self.status_code = status_code or 200
+    self.headers = headers or {}
+end
 
 ---Send the response data
 ---@param send function async ASGI callable
-function Response.__call(self, send)
+function Response:__call(send)
     local data = {
         "HTTP/1.1 ", assert(http_status[self.status_code or 204]), "\r\n",
         "Content-Length: ", #(self.content or {}), "\r\n",
