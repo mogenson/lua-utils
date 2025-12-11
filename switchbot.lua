@@ -30,7 +30,7 @@ local function CBUUID(str)
 end
 
 local function NSData(bytes)
-    return objc.NSData:dataWithBytes_length(ffi.cast("const void*", ffi.new("uint8_t[?]", #bytes, bytes)),
+    return objc.NSData:dataWithBytes_length(objc.cast("const void*", ffi.new("uint8_t[?]", #bytes, bytes)),
         NSInteger(#bytes))
 end
 

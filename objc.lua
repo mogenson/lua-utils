@@ -261,6 +261,7 @@ local objc = setmetatable({
     msgSend = msgSend,
     newClass = newClass,
     ptr = ptr,
+    cast = cast,
 }, {
     __index = function(_, name)
         return cls(name) -- use key to lookup class by name
