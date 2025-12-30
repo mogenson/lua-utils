@@ -51,39 +51,27 @@ local function home(request) ---@diagnostic disable-line:unused-local
     local html = { [[
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.5">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css">
+<title>NextBus</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.min.css">
+<script src="https://cdn.jsdelivr.net/npm/htmx.org@2/dist/htmx.min.js"></script>
 </head>
 <body>
-<h1>Arrivals</h1>
-<pre id="arrivals">
-  Click "Refresh" to load arrival times.
-</pre>
-<button id="refresh_button">Refresh</button>
-<button id="close_button">Close</button>
-<script>
-  document.getElementById('refresh_button').addEventListener('click', function() {
-    fetch('/arrivals')
-      .then(response => response.text())
-      .then(data => {
-        document.getElementById('arrivals').innerHTML = data;
-      });
-  });
-  document.getElementById('close_button').addEventListener('click', function() {
-    fetch('/shutdown')
-      .then(response => {
-        window.close();
-      });
-  });
-document.getElementById('refresh_button').click()
-</script>
+<header><h1>Arrivals</h1></header>
+<main>
+<pre id="arrivals" hx-get="/arrivals" hx-trigger="load">Loading arrival times...</pre>
+<p id="last-update">Waiting for update...</p><br>
+<button hx-get="/arrivals" hx-target="#arrivals" hx-swap="innerHTML">Refresh</button>
+<button hx-post="/shutdown" hx-on::after-request="window.close()">Close</button>
+</main><hr>
+<footer>
 ]] }
 
-    table.insert(html, "<p>LibUV time: " .. loop:now() .. "</p>")
-    table.insert(html, "<p>Using " .. collectgarbage("count") .. " Kb</p>")
-    table.insert(html, "</body>\r\n</html>")
+    table.insert(html, "<p>LibUV time: <ins>" .. loop:now() .. "</ins></p>")
+    table.insert(html, "<p>Using <mark>" .. collectgarbage("count") .. "</mark> Kb</p>")
+    table.insert(html, "</footer></body></html>")
 
-    return Response(table.concat(html, "\r\n"))
+    return Response(table.concat(html))
 end
 
 ---Return bus arrivals
@@ -103,8 +91,8 @@ Davis Square
     Red line: %s min
 Kendall Square
     Red line: %s min
-
-As of: %2d:%02d]]):format(table.unpack(
+<div id="last-update" hx-swap-oob="true">Last updated: %2d:%02d:%02d</div>
+]]):format(table.unpack(
         List(table.pack(a.wait(a.gather({
             -- Teele Square
             eta("87", 2576),
@@ -124,7 +112,8 @@ As of: %2d:%02d]]):format(table.unpack(
         :map(math.max, 0)
         :map(math.floor)
         :append(date.hour)
-        :append(date.min))))
+        :append(date.min)
+        :append(date.sec))))
 end
 
 ---Shutdown the server
@@ -143,7 +132,7 @@ end
 local routes = {
     Route("/", home),
     Route("/arrivals", arrivals),
-    Route("/shutdown", shutdown),
+    Route("/shutdown", shutdown, { "POST" }),
 }
 local app = Application(routes)
 local server = Server(app)
