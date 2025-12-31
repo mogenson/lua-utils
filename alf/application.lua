@@ -20,7 +20,7 @@ end
 ---@param scope Scope
 ---@param receive function async ASGI callable
 ---@param send function async ASGI callable
-Application.__call = a.sync(function(self, scope, receive, send)
+Application.run = a.sync(function(self, scope, receive, send)
     -- read the rest of the body, if needed
     local content_length = tonumber(scope.headers["Content-Length"] or 0)
     while #scope.body < content_length do
@@ -39,7 +39,7 @@ Application.__call = a.sync(function(self, scope, receive, send)
         end
     end)()
 
-    response(send)
+    response:send(send)
 end)
 
 return Application

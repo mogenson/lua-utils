@@ -15,6 +15,7 @@ local SUPPORTED_METHODS = { "GET", "POST", "HEAD", "DELETE", "PUT", "PATCH" }
 local SUPPORTED_VERSIONS = { "1.0", "1.1", "2" }
 
 ---@class Parser An HTTP 1.1 Parser
+---@field parse function
 ---@field INVALID_REQUEST_LINE number
 ---@field METHOD_NOT_IMPLEMENTED number
 ---@field VERSION_NOT_SUPPORTED number
@@ -34,7 +35,7 @@ Parser.VERSION_NOT_SUPPORTED = 3
 ---@param receive function an async function that returns data
 ---@return Scope request metadata
 ---@return number|nil parsing error
-Parser.__call = a.sync(function(self, receive)
+Parser.parse = a.sync(function(self, receive)
     local scope = Scope()
     local data = a.wait(receive())
 

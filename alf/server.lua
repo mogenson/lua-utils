@@ -34,7 +34,7 @@ local on_connection = a.sync(function(client, app)
     local receive = a.sync(function() return a.wait(q:get()) end)
 
     local parser = Parser()
-    local scope, err = a.wait(parser(receive))
+    local scope, err = a.wait(parser:parse(receive))
 
     if err then
         if err == Parser.INVALID_REQUEST_LINE then
@@ -45,7 +45,7 @@ local on_connection = a.sync(function(client, app)
             a.wait(send("HTTP/1.1 505 HTTP Version Not Supported\r\n\r\n"))
         end
     else
-        a.wait(app(scope, receive, send))
+        a.wait(app:run(scope, receive, send))
     end
 
     client:close()
@@ -67,7 +67,7 @@ end
 ---@param host string
 ---@param port number
 ---@return boolean true if there are no active handles on stop
-function Server:__call(host, port)
+function Server:serve(host, port)
     self.tcp = loop:tcp()
     self.tcp:bind(host, port)
 

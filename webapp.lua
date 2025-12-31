@@ -3,10 +3,11 @@ local curl = require("libcurl")
 local json = require("json")
 local loop = require("libuv")
 
-local List = require("pl.List")
+local seq = require("pl.seq")
 local operator = require("pl.operator")
 
 local Application = require("alf.application")
+local Element = require("alf.element")
 local Response = require("alf.response")
 local Route = require("alf.route")
 local Server = require("alf.server")
@@ -78,8 +79,24 @@ end
 ---@param request Request
 ---@return Response
 local function arrivals(request) ---@diagnostic disable-line:unused-local
+    local times = table.pack(a.wait(a.gather({
+        -- Teele Square
+        eta("87", 2576),
+        eta("88", 2576),
+        -- Davis Square
+        eta("87", 5104),
+        eta("88", 5104),
+        eta("Red", 70063),
+        -- Kendall Square
+        eta("Red", 70072)
+    })))
     local date = os.date("*t")
     local now = (date.hour * 3600) + (date.min * 60) + date.sec
+    local updated = Element(
+        "div",
+        string.format("Last updated: %2d:%02d:%02d", date.hour, date.min, date.sec),
+        { "id='last-update'", "hx-swap-oob='true'" }
+    )
 
     return Response(([[
 Teele Square
@@ -91,29 +108,17 @@ Davis Square
     Red line: %s min
 Kendall Square
     Red line: %s min
-<div id="last-update" hx-swap-oob="true">Last updated: %2d:%02d:%02d</div>
-]]):format(table.unpack(
-        List(table.pack(a.wait(a.gather({
-            -- Teele Square
-            eta("87", 2576),
-            eta("88", 2576),
-            -- Davis Square
-            eta("87", 5104),
-            eta("88", 5104),
-            eta("Red", 70063),
-            -- Kendall Square
-            eta("Red", 70072)
-        }))))
-        :map(json.decode)
-        :map(function(data) return data.data[1].attributes.arrival_time or "" end)
-        :map(to_seconds)
-        :map(operator.sub, now)
-        :map(operator.div, 60)
-        :map(math.max, 0)
-        :map(math.floor)
-        :append(date.hour)
-        :append(date.min)
-        :append(date.sec))))
+]]):format(table.unpack(seq(times)
+            :map(json.decode)
+            :map(function(data) return data.data[1].attributes.arrival_time or "" end)
+            :map(to_seconds)
+            :map(operator.sub, now)
+            :map(operator.div, 60)
+            :map(math.max, 0)
+            :map(math.floor)
+            :copy()))
+        .. updated:render()
+    )
 end
 
 ---Shutdown the server
@@ -144,4 +149,4 @@ local command = jit.os == "OSX" and "open" or jit.os == "Linux" and "termux-open
 os.execute(("%s http://%s:%d"):format(command, host, port))
 
 -- run server
-os.exit(server(host, port) and 0 or 1)
+os.exit(server:serve(host, port) and 0 or 1)

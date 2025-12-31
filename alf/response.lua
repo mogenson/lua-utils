@@ -72,7 +72,7 @@ end
 
 ---Send the response data
 ---@param send function async ASGI callable
-function Response:__call(send)
+function Response:send(send)
     local data = {
         "HTTP/1.1 ", assert(http_status[self.status_code or 204]), "\r\n",
         "Content-Length: ", #(self.content or {}), "\r\n",
