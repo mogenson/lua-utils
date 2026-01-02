@@ -12,6 +12,26 @@ local Response = require("alf.response")
 local Route = require("alf.route")
 local Server = require("alf.server")
 
+local Body = Element.Body
+local Br = Element.Br
+local Div = Element.Div
+local Footer = Element.Footer
+local H1 = Element.H1
+local Head = Element.Head
+local Header = Element.Header
+local Hr = Element.Hr
+local Html = Element.Html
+local Input = Element.Input
+local Ins = Element.Ins
+local Link = Element.Link
+local Main = Element.Main
+local Mark = Element.Mark
+local Meta = Element.Meta
+local P = Element.P
+local Pre = Element.Pre
+local Script = Element.Script
+local Title = Element.Title
+
 ---Sleep current async task until time has elapsed
 ---@param ms number duration in milliseconds
 ---@param cb fun()
@@ -49,30 +69,48 @@ end
 ---@param request Request
 ---@return Response
 local function home(request) ---@diagnostic disable-line:unused-local
-    local html = { [[
-<html>
-<head>
-<title>NextBus</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.min.css">
-<script src="https://cdn.jsdelivr.net/npm/htmx.org@2/dist/htmx.min.js"></script>
-</head>
-<body>
-<header><h1>Arrivals</h1></header>
-<main>
-<pre id="arrivals" hx-get="/arrivals" hx-trigger="load">Loading arrival times...</pre>
-<p id="last-update">Waiting for update...</p><br>
-<button hx-get="/arrivals" hx-target="#arrivals" hx-swap="innerHTML">Refresh</button>
-<button hx-post="/shutdown" hx-on::after-request="window.close()">Close</button>
-</main><hr>
-<footer>
-]] }
+    local html = Html(nil, {
+        Head(nil, {
+            Title(nil, "NextBus"),
+            Meta()
+                :addAttribute("name='viewport'")
+                :addAttribute("content='width=device-width, initial-scale=1'"),
+            Link()
+                :addAttribute("rel='stylesheet'")
+                :addAttribute("href='https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.min.css'"),
+            Script({ "src='https://cdn.jsdelivr.net/npm/htmx.org@2/dist/htmx.min.js'" }),
+        }),
+        Body(nil, {
+            Header(nil, H1(nil, "Arrivals")),
+            Main(nil, {
+                Pre()
+                    :addAttribute("id='arrivals'")
+                    :addAttribute("hx-get='/arrivals'")
+                    :addAttribute("hx-trigger='load'")
+                    :setContent("Loading arrival times..."),
+                P({ "id='last-update'" }, "Waiting for update..."),
+                Br(),
+                Input()
+                    :addAttribute("type='button'")
+                    :addAttribute("value='Refresh'")
+                    :addAttribute("hx-get='/arrivals'")
+                    :addAttribute("hx-target='#arrivals'")
+                    :addAttribute("hx-swap='innerHTML'"),
+                Input()
+                    :addAttribute("type='button'")
+                    :addAttribute("value='Close'")
+                    :addAttribute("hx-post='/shutdown'")
+                    :addAttribute("hx-on::after-request='window.close()'"),
+            }),
+            Hr(),
+            Footer(nil, {
+                P(nil, { "LibUV time: ", Ins(nil, function() return loop:now() end) }),
+                P(nil, { "Using ", Mark(nil, function() return collectgarbage("count") end), "Kb" })
+            }),
+        }),
+    })
 
-    table.insert(html, "<p>LibUV time: <ins>" .. loop:now() .. "</ins></p>")
-    table.insert(html, "<p>Using <mark>" .. collectgarbage("count") .. "</mark> Kb</p>")
-    table.insert(html, "</footer></body></html>")
-
-    return Response(table.concat(html))
+    return Response(html)
 end
 
 ---Return bus arrivals
@@ -92,11 +130,10 @@ local function arrivals(request) ---@diagnostic disable-line:unused-local
     })))
     local date = os.date("*t")
     local now = (date.hour * 3600) + (date.min * 60) + date.sec
-    local updated = Element(
-        "div",
-        string.format("Last updated: %2d:%02d:%02d", date.hour, date.min, date.sec),
-        { "id='last-update'", "hx-swap-oob='true'" }
-    )
+    local updated = Div()
+        :addAttribute("id='last-update'")
+        :addAttribute("hx-swap-oob='true'")
+        :setContent(("Last updated: %2d:%02d:%02d"):format(date.hour, date.min, date.sec))
 
     return Response(([[
 Teele Square
