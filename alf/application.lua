@@ -18,13 +18,13 @@ end
 ---An async entrypoint into the Application
 ---@param self Application
 ---@param scope Scope
----@param receive function async ASGI callable
----@param send function async ASGI callable
-Application.run = a.sync(function(self, scope, receive, send)
+---@param receiver function async ASGI callable
+---@param sender function async ASGI callable
+Application.run = a.sync(function(self, scope, receiver, sender)
     -- read the rest of the body, if needed
     local content_length = tonumber(scope.headers["Content-Length"] or 0)
     while #scope.body < content_length do
-        scope.body = scope.body .. a.wait(receive())
+        scope.body = scope.body .. a.wait(receiver())
     end
 
     local match, route = self.router:route(scope.method, scope.path)
@@ -39,7 +39,7 @@ Application.run = a.sync(function(self, scope, receive, send)
         end
     end)()
 
-    response:send(send)
+    response:send(sender)
 end)
 
 return Application

@@ -162,13 +162,14 @@ end
 ---@param request Request
 ---@return Response
 local function shutdown(request) ---@diagnostic disable-line:unused-local
-    return setmetatable({ response = Response(), }, {
-        __call = function(self, send)
-            self.response(send)
-            print("goodbye")
-            loop:shutdown() -- shutdown after response is sent
-        end
-    })
+    local response = Response()
+    local send = response.send
+    response.send = function(self, sender)
+        send(self, sender)
+        print("goodbye")
+        loop:shutdown()     -- shutdown after response is sent
+    end
+    return response
 end
 
 local routes = {

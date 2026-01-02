@@ -73,8 +73,8 @@ function Response:_init(content, content_type, status_code, headers)
 end
 
 ---Send the response data
----@param send function async ASGI callable
-function Response:send(send)
+---@param sender function async ASGI callable
+function Response:send(sender)
     if Element:class_of(self.content) then
         self.content = self.content:render()
         self.content_type = "text/html"
@@ -93,7 +93,7 @@ function Response:send(send)
     table.insert(data, "\r\n")
     table.insert(data, self.content)
 
-    a.wait(send(table.concat(data)))
+    a.wait(sender(table.concat(data)))
 end
 
 return Response

@@ -30,22 +30,22 @@ local on_connection = a.sync(function(client, app)
     local q = a.queue()
     client:read_start(function(data) q:put(data) end)
 
-    local send = a.wrap(function(data, cb) client:write(data, cb) end)
-    local receive = a.sync(function() return a.wait(q:get()) end)
+    local sender = a.wrap(function(data, cb) client:write(data, cb) end)
+    local receiver = a.sync(function() return a.wait(q:get()) end)
 
     local parser = Parser()
-    local scope, err = a.wait(parser:parse(receive))
+    local scope, err = a.wait(parser:parse(receiver))
 
     if err then
         if err == Parser.INVALID_REQUEST_LINE then
-            a.wait(send("HTTP/1.1 400 Bad Request\r\n\r\n"))
+            a.wait(sender("HTTP/1.1 400 Bad Request\r\n\r\n"))
         elseif err == Parser.METHOD_NOT_IMPLEMENTED then
-            a.wait(send("HTTP/1.1 501 Not Implemented\r\n\r\n"))
+            a.wait(sender("HTTP/1.1 501 Not Implemented\r\n\r\n"))
         elseif err == Parser.VERSION_NOT_SUPPORTED then
-            a.wait(send("HTTP/1.1 505 HTTP Version Not Supported\r\n\r\n"))
+            a.wait(sender("HTTP/1.1 505 HTTP Version Not Supported\r\n\r\n"))
         end
     else
-        a.wait(app:run(scope, receive, send))
+        a.wait(app:run(scope, receiver, sender))
     end
 
     client:close()
