@@ -8,7 +8,6 @@ local Em = class(Element.Container)
 ---Init Em Container element
 ---@param attributes Attributes|nil
 ---@param content Content|nil
----@diagnostic disable-next-line duplicate-set-field
 function Em:_init(attributes, content)
     self:super("em", attributes, content)
 end

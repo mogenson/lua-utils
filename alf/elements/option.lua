@@ -8,7 +8,6 @@ local Option = class(Element.Container)
 ---Init Option Container element
 ---@param attributes Attributes|nil
 ---@param content Content|nil
----@diagnostic disable-next-line duplicate-set-field
 function Option:_init(attributes, content)
     self:super("option", attributes, content)
 end

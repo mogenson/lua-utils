@@ -8,7 +8,6 @@ local Thead = class(Element.Container)
 ---Init Thead Container element
 ---@param attributes Attributes|nil
 ---@param content Content|nil
----@diagnostic disable-next-line duplicate-set-field
 function Thead:_init(attributes, content)
     self:super("thead", attributes, content)
 end

@@ -7,9 +7,9 @@ local Br = class(Element.Void)
 
 ---Init Br Void element
 ---@param attributes Attributes|nil
----@diagnostic disable-next-line duplicate-set-field
-function Br:_init(attributes)
-    self:super("br", attributes)
+---@param content Content|nil
+function Br:_init(attributes, content)
+    self:super("br", attributes, content)
 end
 
 return Br

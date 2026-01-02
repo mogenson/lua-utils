@@ -7,9 +7,9 @@ local Link = class(Element.Void)
 
 ---Init Link Void element
 ---@param attributes Attributes|nil
----@diagnostic disable-next-line duplicate-set-field
-function Link:_init(attributes)
-    self:super("link", attributes)
+---@param content Content|nil
+function Link:_init(attributes, content)
+    self:super("link", attributes, content)
 end
 
 return Link

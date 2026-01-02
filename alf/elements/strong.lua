@@ -8,7 +8,6 @@ local Strong = class(Element.Container)
 ---Init Strong Container element
 ---@param attributes Attributes|nil
 ---@param content Content|nil
----@diagnostic disable-next-line duplicate-set-field
 function Strong:_init(attributes, content)
     self:super("strong", attributes, content)
 end

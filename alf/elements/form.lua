@@ -8,7 +8,6 @@ local Form = class(Element.Container)
 ---Init Form Container element
 ---@param attributes Attributes|nil
 ---@param content Content|nil
----@diagnostic disable-next-line duplicate-set-field
 function Form:_init(attributes, content)
     self:super("form", attributes, content)
 end

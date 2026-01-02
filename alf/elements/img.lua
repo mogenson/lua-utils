@@ -7,9 +7,9 @@ local Img = class(Element.Void)
 
 ---Init Img Void element
 ---@param attributes Attributes|nil
----@diagnostic disable-next-line duplicate-set-field
-function Img:_init(attributes)
-    self:super("img", attributes)
+---@param content Content|nil
+function Img:_init(attributes, content)
+    self:super("img", attributes, content)
 end
 
 return Img

@@ -8,7 +8,6 @@ local Div = class(Element.Container)
 ---Init Div Container element
 ---@param attributes Attributes|nil
 ---@param content Content|nil
----@diagnostic disable-next-line duplicate-set-field
 function Div:_init(attributes, content)
     self:super("div", attributes, content)
 end

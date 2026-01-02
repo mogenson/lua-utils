@@ -7,9 +7,9 @@ local Meta = class(Element.Void)
 
 ---Init Meta Void element
 ---@param attributes Attributes|nil
----@diagnostic disable-next-line duplicate-set-field
-function Meta:_init(attributes)
-    self:super("meta", attributes)
+---@param content Content|nil
+function Meta:_init(attributes, content)
+    self:super("meta", attributes, content)
 end
 
 return Meta
