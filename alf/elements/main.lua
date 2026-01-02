@@ -1,0 +1,16 @@
+local class = require("pl.class")
+
+local Element = require("alf.elements.element")
+
+---@class Main: Container
+local Main = class(Element.Container)
+
+---Init Main Container element
+---@param attributes Attributes|nil
+---@param content Content|nil
+---@diagnostic disable-next-line duplicate-set-field
+function Main:_init(attributes, content)
+    self:super("main", attributes, content)
+end
+
+return Main

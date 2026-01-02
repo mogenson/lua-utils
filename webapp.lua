@@ -7,30 +7,29 @@ local seq = require("pl.seq")
 local operator = require("pl.operator")
 
 local Application = require("alf.application")
-local Element = require("alf.element")
 local Response = require("alf.response")
 local Route = require("alf.route")
 local Server = require("alf.server")
 
-local Body = Element.Body
-local Br = Element.Br
-local Div = Element.Div
-local Footer = Element.Footer
-local H1 = Element.H1
-local Head = Element.Head
-local Header = Element.Header
-local Hr = Element.Hr
-local Html = Element.Html
-local Input = Element.Input
-local Ins = Element.Ins
-local Link = Element.Link
-local Main = Element.Main
-local Mark = Element.Mark
-local Meta = Element.Meta
-local P = Element.P
-local Pre = Element.Pre
-local Script = Element.Script
-local Title = Element.Title
+local Body = require("alf.elements.Body")
+local Br = require("alf.elements.Br")
+local Div = require("alf.elements.Div")
+local Footer = require("alf.elements.Footer")
+local H1 = require("alf.elements.H1")
+local Head = require("alf.elements.Head")
+local Header = require("alf.elements.Header")
+local Hr = require("alf.elements.Hr")
+local Html = require("alf.elements.Html")
+local Input = require("alf.elements.Input")
+local Ins = require("alf.elements.Ins")
+local Link = require("alf.elements.Link")
+local Main = require("alf.elements.Main")
+local Mark = require("alf.elements.Mark")
+local Meta = require("alf.elements.Meta")
+local P = require("alf.elements.P")
+local Pre = require("alf.elements.Pre")
+local Script = require("alf.elements.Script")
+local Title = require("alf.elements.Title")
 
 ---Sleep current async task until time has elapsed
 ---@param ms number duration in milliseconds
@@ -167,7 +166,7 @@ local function shutdown(request) ---@diagnostic disable-line:unused-local
     response.send = function(self, sender)
         send(self, sender)
         print("goodbye")
-        loop:shutdown()     -- shutdown after response is sent
+        loop:shutdown() -- shutdown after response is sent
     end
     return response
 end
