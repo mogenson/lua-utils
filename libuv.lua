@@ -75,6 +75,7 @@ ffi.cdef(string.format([[
     struct uv_write_s {uint8_t _[%d];};
     struct uv_shutdown_s {uint8_t _[%d];};
     struct uv_getaddrinfo_s {uint8_t _[%d];};
+    struct uv_fs_s {uint8_t _[%d];};
     struct uv_tcp_s {uint8_t _[%d];};
     struct uv_tty_s {uint8_t _[%d];};
     struct uv_pipe_s {uint8_t _[%d];};
@@ -87,6 +88,7 @@ ffi.cdef(string.format([[
     tonumber(libuv.uv_req_size(libuv.UV_WRITE)),
     tonumber(libuv.uv_req_size(libuv.UV_SHUTDOWN)),
     tonumber(libuv.uv_req_size(libuv.UV_GETADDRINFO)),
+    tonumber(libuv.uv_req_size(libuv.UV_FS)),
     tonumber(libuv.uv_handle_size(libuv.UV_TCP)),
     tonumber(libuv.uv_handle_size(libuv.UV_TTY)),
     tonumber(libuv.uv_handle_size(libuv.UV_NAMED_PIPE)),
@@ -110,6 +112,7 @@ ffi.cdef([[
     typedef struct uv_timer_s uv_timer_t;
     typedef struct uv_poll_s uv_poll_t;
     typedef struct uv_signal_s uv_signal_t;
+    typedef struct uv_fs_s uv_fs_t;
 
     const char* uv_err_name(int err);
     const char* uv_strerror(int err);
@@ -124,11 +127,11 @@ local function get_error(status)
     return string.format("%s: %s", name, err)
 end
 
----Checks the status of a libuv operation and throws an error if it's negative.
+---Checks the status of a libuv operation and returns an error if negative
 ---@param status number
----@return number
+---@return string? error
 local function check(status)
-    return status < 0 and error(get_error(status)) or assert(tonumber(status))
+    return status < 0 and get_error(status) or nil
 end
 
 local cast = setmetatable({}, {
@@ -150,7 +153,7 @@ local cast = setmetatable({}, {
 ---Convert a NULL pointer to nil
 ---@generic T
 ---@param p T
----@return T|nil
+---@return T?
 local function pointer(p)
     if p == nil then return nil else return p end
 end
@@ -230,6 +233,10 @@ ffi.cdef([[
 ---@field UV_WRITABLE number
 ---@field UV_DISCONNECT number
 ---@field UV_PRIORITIZED number
+---@field UV_DIRENT_UNKNOWN number
+---@field UV_DIRENT_FILE number
+---@field UV_DIRENT_DIR number
+---@field UV_DIRENT_LINK number
 local Loop = setmetatable({}, { __index = libuv })
 ffi.metatype(ffi.typeof("uv_loop_t"), { __index = Loop })
 
@@ -260,8 +267,8 @@ function Loop:shutdown()
 end
 
 ---Start the event loop.
----@param mode number|nil a member of the uv_run_mode enum
--- @return number
+---@param mode number? a member of the uv_run_mode enum
+---@return string? error
 function Loop:run(mode)
     return check(libuv.uv_run(self, mode or libuv.UV_RUN_DEFAULT))
 end
@@ -279,39 +286,42 @@ local Timer = setmetatable({}, Handle)
 ffi.metatype(ffi.typeof("uv_timer_t"), { __index = Timer, __tostring = Handle.__tostring, __gc = Handle.__gc })
 
 ---Creates a new timer.
----@return Timer
+---@return Timer?
+---@return string? error
 function Loop:timer()
     local timer = ffi.new("uv_timer_t") ---@cast timer Timer
-    check(libuv.uv_timer_init(self, timer))
-    return timer
+    local err   = check(libuv.uv_timer_init(self, timer))
+    return not err and timer or nil, err
 end
 
 ---Starts a timer.
 ---@param timeout number
 ---@param callback fun()
+---@return string? error
 function Timer:start(timeout, callback)
     local cb = nil ---@type ffi.cb*
-    cb = cast("uv_timer_cb", function(handle) ---@diagnostic disable-line:unused-local
+    cb = cast("uv_timer_cb", function(_)
         cb:free()
         return callback and callback()
     end)
-    check(libuv.uv_timer_start(self, cb, timeout, 0))
+    return check(libuv.uv_timer_start(self, cb, timeout, 0))
 end
 
 ---Starts a recurring timer.
 ---@param interval number
 ---@param callback fun()
+---@return string? error
 function Timer:recurring(interval, callback)
-    ---@diagnostic disable-next-line:unused-local
-    local function timer_cb(handle) return callback and callback() end
+    local function timer_cb(_) return callback and callback() end
     local cb = self:cache_callback("timer_cb", timer_cb)
-    check(libuv.uv_timer_start(self, cb, interval, interval))
+    return check(libuv.uv_timer_start(self, cb, interval, interval))
 end
 
 ---Stops a timer.
+---@return string? error
 function Timer:stop()
     self:cache_callback("timer_cb", nil)
-    check(libuv.uv_timer_stop(self))
+    return check(libuv.uv_timer_stop(self))
 end
 
 ffi.cdef([[
@@ -334,31 +344,33 @@ ffi.metatype(ffi.typeof("uv_poll_t"), { __index = Poll, __tostring = Handle.__to
 
 ---Creates a new poll handle.
 ---@param fd number
----@return Poll
+---@return Poll?
+---@return string? error
 function Loop:poll(fd)
     local poll = ffi.new("uv_poll_t") ---@cast poll Poll
-    check(libuv.uv_poll_init(self, poll, fd))
-    return poll
+    local err = check(libuv.uv_poll_init(self, poll, fd))
+    return not err and poll or nil, err
 end
 
 ---Starts polling a file descriptor.
 ---@param events number a member of the uv_poll_event enum
----@param callback fun(events:number)
+---@param callback fun(events: number?, err: string?)
+---@return string? error
 function Poll:start(events, callback)
-    ---@diagnostic disable-next-line:redefined-local,unused-local
-    local function poll_cb(handle, status, events)
-        check(status)
-        return callback and callback(events)
+    local function poll_cb(_, status, events)
+        local err = check(status)
+        return callback and callback(not err and events or nil, err)
     end
 
     local cb = self:cache_callback("poll_cb", poll_cb)
-    check(libuv.uv_poll_start(self, events, cb))
+    return check(libuv.uv_poll_start(self, events, cb))
 end
 
 ---Stops polling a file descriptor.
+---@return string? error
 function Poll:stop()
     self:cache_callback("poll_cb", nil)
-    check(libuv.uv_poll_stop(self))
+    return check(libuv.uv_poll_stop(self))
 end
 
 ffi.cdef([[
@@ -373,24 +385,25 @@ local Signal = setmetatable({}, Handle)
 ffi.metatype(ffi.typeof("uv_signal_t"), { __index = Signal, __tostring = Handle.__tostring, __gc = Handle.__gc })
 
 ---Creates a new signal.
----@return Signal
+---@return Signal?
+---@return string? error
 function Loop:signal()
     local signal = ffi.new("uv_signal_t") ---@cast signal Signal
-    check(libuv.uv_signal_init(self, signal))
-    return signal
+    local err = check(libuv.uv_signal_init(self, signal))
+    return not err and signal or nil, err
 end
 
 ---Starts a signal.
 ---@param signum number
 ---@param callback fun(signum: number)
+---@return string? error
 function Signal:start(signum, callback)
     local cb = nil ---@type ffi.cb*
-    ---@diagnostic disable-next-line:unused-local,redefined-local
-    cb = cast("uv_signal_cb", function(handle, signum)
-        assert(cb):free()
+    cb = cast("uv_signal_cb", function(_, _)
+        cb:free()
         return callback and callback(signum)
     end)
-    check(libuv.uv_signal_start_oneshot(self, cb, signum))
+    return check(libuv.uv_signal_start_oneshot(self, cb, signum))
 end
 
 ffi.cdef([[
@@ -405,10 +418,13 @@ Request.__index = Request
 ffi.metatype(ffi.typeof("uv_connect_t"), Request)
 ffi.metatype(ffi.typeof("uv_write_t"), Request)
 ffi.metatype(ffi.typeof("uv_shutdown_t"), Request)
+ffi.metatype(ffi.typeof("uv_getaddrinfo_t"), Request)
+ffi.metatype(ffi.typeof("uv_fs_t"), Request)
 
 ---Cancel a request
+---@return string? error
 function Request:cancel()
-    check(libuv.uv_cancel(cast("uv_req_t*", self)))
+    return check(libuv.uv_cancel(cast("uv_req_t*", self)))
 end
 
 ---Return the request type as a string
@@ -466,90 +482,87 @@ Stream.__index = Stream
 ffi.metatype(ffi.typeof("uv_stream_t"), { __index = Stream, __tostring = Handle.__tostring, __gc = Handle.__gc })
 
 ---Shutdown and close a stream
----@param callback fun()|nil
+---@param callback fun(err: string?)?
+---@return string? error
 function Stream:shutdown(callback)
-    local req = cast("uv_shutdown_t*", ffi.C.malloc(ffi.sizeof("uv_shutdown_t")))
     local handle = cast("uv_stream_t*", self)
-    local cb = nil ---@type ffi.cb*
-    cb = cast("uv_shutdown_cb", function(req, status) ---@diagnostic disable-line:redefined-local
+    local req, cb = ffi.new("uv_shutdown_t"), nil ---@cast cb ffi.cb*
+    cb = cast("uv_shutdown_cb", function(_, status)
         cb:free()
-        ffi.C.free(req)
-        check(status)
-        return callback and callback()
+        return callback and callback(check(status))
     end)
-    check(libuv.uv_shutdown(req, handle, cb))
+    return check(libuv.uv_shutdown(req, handle, cb))
 end
 
 ---Listen for a client to connect to a stream
 ---@param backlog number
----@param callback fun()
+---@param callback fun(err: string?)
+---@return string? error
 function Stream:listen(backlog, callback)
-    local function connection_cb(server, status) ---@diagnostic disable-line:unused-local
-        check(status)
-        return callback and callback()
+    local function connection_cb(_, status)
+        return callback and callback(check(status))
     end
-
     local stream = cast("uv_stream_t*", self)
     local cb = self:cache_callback("connection_cb", connection_cb)
-    check(libuv.uv_listen(stream, backlog, cb))
+    return check(libuv.uv_listen(stream, backlog, cb))
 end
 
 ---Accept a connecting client
 ---@param client Stream
+---@return string? error
 function Stream:accept(client)
     local server = cast("uv_stream_t*", self)
     local client = cast("uv_stream_t*", client) ---@diagnostic disable-line:redefined-local
-    check(libuv.uv_accept(server, client))
+    return check(libuv.uv_accept(server, client))
 end
 
 ---Start reading from a stream
----@param callback fun(data:string|nil)
+---@param callback fun(data: string?, err: string?)
+---@return string? error
 function Stream:read_start(callback)
     local stream = cast("uv_stream_t*", self)
 
     ---Process internal read callback
-    ---@param stream Stream
     ---@param nread number
     ---@param buf Buffer
-    local function read_cb(stream, nread, buf) ---@diagnostic disable-line:redefined-local,unused-local
+    local function read_cb(_, nread, buf)
         if nread == 0 then
             return
         elseif nread == libuv.UV_EOF then
-            return callback and callback(nil)
+            return callback and callback(nil, nil)
+        elseif nread < 0 then
+            return callback and callback(nil, get_error(nread))
         else
-            check(nread) -- shoud be > 0
-            return callback and callback(ffi.string(buf.base, nread))
+            return callback and callback(ffi.string(buf.base, nread), nil)
         end
     end
 
     local cb = self:cache_callback("read_cb", read_cb)
-    check(libuv.uv_read_start(stream, Stream.alloc_cb, cb))
+    return check(libuv.uv_read_start(stream, Stream.alloc_cb, cb))
 end
 
 ---Stop reading from a stream
+---@return string? error
 function Stream:read_stop()
     self:cache_callback("read_cb", nil)
-    check(libuv.uv_read_stop(cast("uv_stream_t*", self)))
+    return check(libuv.uv_read_stop(cast("uv_stream_t*", self)))
 end
 
 ---Write data to a stream
 ---@param data string
----@param callback fun()|nil
+---@param callback fun(err: string?)?
+---@return string? error
 function Stream:write(data, callback)
-    local req = cast("uv_write_t*", ffi.C.malloc(ffi.sizeof("uv_write_t")))
     local handle = cast("uv_stream_t*", self)
-    local bufs = ffi.new("uv_buf_t[1]")
-    bufs[0].base = cast("char*", data)
-    bufs[0].len = #data
-    local nbufs = 1
-    local cb = nil ---@type ffi.cb*
-    cb = cast("uv_write_cb", function(req, status) ---@diagnostic disable-line:redefined-local
+    local buf = ffi.new("uv_buf_t") ---@cast buf Buffer
+    buf.base = cast("char*", data)
+    buf.len = #data
+    local req, cb = ffi.new("uv_write_t"), nil ---@cast cb ffi.cb*
+    cb = cast("uv_write_cb", function(_, status)
         cb:free()
-        ffi.C.free(req)
-        check(status)
-        return callback and callback()
+        return callback and callback(check(status))
     end)
-    check(libuv.uv_write(req, handle, bufs, nbufs, cb))
+    return check(libuv.uv_write(req, handle, buf, 1, cb))
 end
 
 ffi.cdef([[
@@ -565,38 +578,39 @@ local Tcp = setmetatable({}, Stream)
 ffi.metatype(ffi.typeof("uv_tcp_t"), { __index = Tcp, __tostring = Handle.__tostring, __gc = Handle.__gc })
 
 ---Creates a new Tcp socket
----@return Tcp
+---@return Tcp?
+---@return string? error
 function Loop:tcp()
     local tcp = ffi.new("uv_tcp_t") ---@cast tcp Tcp
-    check(libuv.uv_tcp_init(self, tcp))
-    return tcp
+    local err = check(libuv.uv_tcp_init(self, tcp))
+    return not err and tcp or nil, err
 end
 
 ---Bind socket to an IP address and port
 ---@param host string
 ---@param port number
+---@return string? error
 function Tcp:bind(host, port)
     local addr = ffi.new("struct sockaddr_in")
-    check(libuv.uv_ip4_addr(host, port, addr))
-    check(libuv.uv_tcp_bind(self, cast("const struct sockaddr*", addr), 0))
+    local err = check(libuv.uv_ip4_addr(host, port, addr))
+    if err then return err end
+    return check(libuv.uv_tcp_bind(self, cast("const struct sockaddr*", addr), 0))
 end
 
 ---Connect to an IP address and port
 ---@param host string
 ---@param port number
----@param callback fun()
+---@param callback fun(err: string?)
+---@return string? error
 function Tcp:connect(host, port, callback)
     local addr = ffi.new("struct sockaddr_in")
     check(libuv.uv_ip4_addr(host, port, addr))
-    local req = cast("uv_connect_t*", ffi.C.malloc(ffi.sizeof("uv_connect_t")))
-    local cb = nil ---@type ffi.cb*
-    cb = cast("uv_connect_cb", function(req, status) ---@diagnostic disable-line:redefined-local
+    local req, cb = ffi.new("uv_connect_t"), nil ---@cast cb ffi.cb*
+    cb = cast("uv_connect_cb", function(_, status)
         cb:free()
-        ffi.C.free(req)
-        check(status)
-        return callback and callback()
+        return callback and callback(check(status))
     end)
-    check(libuv.uv_tcp_connect(req, self, addr, cb))
+    return check(libuv.uv_tcp_connect(req, self, addr, cb))
 end
 
 ffi.cdef([[
@@ -610,33 +624,222 @@ local Pipe = setmetatable({}, Stream)
 ffi.metatype(ffi.typeof("uv_pipe_t"), { __index = Pipe, __tostring = Handle.__tostring, __gc = Handle.__gc })
 
 ---Creates a new Pipe
----@param ipc boolean|nil
----@return Pipe
+---@param ipc boolean?
+---@return Pipe?
+---@return string? error
 function Loop:pipe(ipc)
     local pipe = ffi.new("uv_pipe_t") ---@cast pipe Pipe
-    check(libuv.uv_pipe_init(self, pipe, ipc and 1 or 0))
-    return pipe
+    local err = check(libuv.uv_pipe_init(self, pipe, ipc and 1 or 0))
+    return not err and pipe or nil, err
 end
 
 ---Bind pipe to a local path
 ---@param name string
+---@return string? error
 function Pipe:bind(name)
-    check(libuv.uv_pipe_bind(self, name))
+    return check(libuv.uv_pipe_bind(self, name))
 end
 
 ---Connect pipe to a local path
 ---@param name string
----@param callback fun()
+---@param callback fun(err: string?)
 function Pipe:connect(name, callback)
-    local req = cast("uv_connect_t*", ffi.C.malloc(ffi.sizeof("uv_connect_t")))
-    local cb = nil ---@type ffi.cb*
-    cb = cast("uv_connect_cb", function(req, status) ---@diagnostic disable-line:redefined-local
+    local req, cb = ffi.new("uv_connect_t"), nil ---@cast cb ffi.cb*
+    cb = cast("uv_connect_cb", function(_, status)
         cb:free()
-        ffi.C.free(req)
-        check(status)
-        return callback and callback()
+        return callback and callback(check(status))
     end)
     libuv.uv_pipe_connect(req, self, name, cb)
+end
+
+ffi.cdef([[
+    typedef enum {
+        UV_DIRENT_UNKNOWN,
+        UV_DIRENT_FILE,
+        UV_DIRENT_DIR,
+        UV_DIRENT_LINK,
+        UV_DIRENT_FIFO,
+        UV_DIRENT_SOCKET,
+        UV_DIRENT_CHAR,
+        UV_DIRENT_BLOCK
+    } uv_dirent_type_t;
+
+    typedef struct uv_dirent_s {
+        const char* name;
+        uv_dirent_type_t type;
+    } uv_dirent_t;
+
+    typedef struct {
+        long tv_sec;
+        long tv_nsec;
+    } uv_timespec_t;
+
+    typedef struct {
+        uint64_t st_dev;
+        uint64_t st_mode;
+        uint64_t st_nlink;
+        uint64_t st_uid;
+        uint64_t st_gid;
+        uint64_t st_rdev;
+        uint64_t st_ino;
+        uint64_t st_size;
+        uint64_t st_blksize;
+        uint64_t st_blocks;
+        uint64_t st_flags;
+        uint64_t st_gen;
+        uv_timespec_t st_atim;
+        uv_timespec_t st_mtim;
+        uv_timespec_t st_ctim;
+        uv_timespec_t st_birthtim;
+    } uv_stat_t;
+
+    enum {
+        S_IFMT  = 0xF000,
+        S_IFDIR = 0x4000,
+        S_IFREG = 0x8000
+    };
+
+    enum {
+        O_RDONLY = 0x0000,
+        O_WRONLY = 0x0001,
+        O_RDWR   = 0x0002
+    };
+
+    typedef int uv_file;
+
+    typedef void (*uv_fs_cb)(uv_fs_t *req);
+
+    int uv_fs_scandir(uv_loop_t *loop, uv_fs_t *req, const char *path, int flags, uv_fs_cb cb);
+    int uv_fs_scandir_next(uv_fs_t *req, uv_dirent_t *ent);
+    int uv_fs_stat(uv_loop_t *loop, uv_fs_t *req, const char *path, uv_fs_cb cb);
+    int uv_fs_open(uv_loop_t *loop, uv_fs_t *req, const char *path, int flags, int mode, uv_fs_cb cb);
+    int uv_fs_close(uv_loop_t *loop, uv_fs_t *req, uv_file file, uv_fs_cb cb);
+    int uv_fs_read(uv_loop_t *loop, uv_fs_t *req, uv_file file, const uv_buf_t bufs[], unsigned int nbufs, int64_t offset, uv_fs_cb cb);
+    int uv_fs_write(uv_loop_t *loop, uv_fs_t *req, uv_file file, const uv_buf_t bufs[], unsigned int nbufs, int64_t offset, uv_fs_cb cb);
+    void uv_fs_req_cleanup(uv_fs_t *req);
+    ssize_t uv_fs_get_result(const uv_fs_t *req);
+    uv_stat_t *uv_fs_get_statbuf(uv_fs_t *req);
+]])
+
+---@class Dirent: ffi.cdata*
+---@field type number|ffi.cdata*
+---@field name string|ffi.cdata*
+
+---Scan directory and collect list of contents
+---@param path string path to directory
+---@param callback fun(entries: { type: number, name: string }[]?, err: string?)
+---@return string? error
+function Loop:fs_scandir(path, callback)
+    local req, cb = ffi.new("uv_fs_t"), nil ---@cast cb ffi.cb*
+    cb = cast("uv_fs_cb", function(_)
+        local entries = nil
+        local err = check(libuv.uv_fs_get_result(req))
+        if not err then
+            local dirent = ffi.new("uv_dirent_t") ---@cast dirent Dirent
+            entries = {}
+            while libuv.uv_fs_scandir_next(req, dirent) ~= libuv.UV_EOF do
+                table.insert(entries, {
+                    type = tonumber(dirent.type),
+                    name = dirent.name == nil and "" or ffi.string(dirent.name)
+                })
+            end
+        end
+        libuv.uv_fs_req_cleanup(req);
+        cb:free()
+        return callback and callback(entries, err)
+    end)
+    return check(libuv.uv_fs_scandir(self, req, path, 0, cb))
+end
+
+---Check if fs_stat st_mode is a directory
+---@param mode number fs_stat st_mode
+---@return boolean
+function Loop.S_ISDIR(mode) ---@diagnostic disable-next-line:param-type-mismatch
+    return bit.band(mode, libuv.S_IFMT) == libuv.S_IFDIR
+end
+
+---Check if fs_stat st_mode is a regular file
+---@param mode number fs_stat st_mode
+---@return boolean
+function Loop.S_ISREG(mode) ---@diagnostic disable-next-line:param-type-mismatch
+    return bit.band(mode, libuv.S_IFMT) == libuv.S_IFREG
+end
+
+---Query file system stats for path
+---@param path string path to file or directory
+---@param callback fun(mode: number?, err: string?)
+---@return string? error
+function Loop:fs_stat(path, callback)
+    local req, cb = ffi.new("uv_fs_t"), nil ---@cast cb ffi.cb*
+    cb = cast("uv_fs_cb", function(_)
+        local mode = nil
+        local err = check(libuv.uv_fs_get_result(req))
+        if not err then
+            local stat = libuv.uv_fs_get_statbuf(req);
+            mode = tonumber(stat.st_mode)
+        end
+        libuv.uv_fs_req_cleanup(req);
+        cb:free()
+        return callback and callback(mode, err)
+    end)
+    return check(libuv.uv_fs_stat(self, req, path, cb))
+end
+
+---Open a file
+---@param path string path to file
+---@param callback fun(fd: number?, err: string?)
+---@return string? error
+function Loop:fs_open(path, callback)
+    local req, cb = ffi.new("uv_fs_t"), nil ---@cast cb ffi.cb*
+    cb = cast("uv_fs_cb", function(_)
+        local result = libuv.uv_fs_get_result(req)
+        local err = check(result)
+        libuv.uv_fs_req_cleanup(req);
+        cb:free()
+        return callback and callback(not err and tonumber(result) or nil, err)
+    end)
+    return check(libuv.uv_fs_open(self, req, path, libuv.O_RDWR, 0, cb))
+end
+
+---Close a file
+---@param fd number
+---@param callback fun(err: string?)
+---@return string? error
+function Loop:fs_close(fd, callback)
+    local req, cb = ffi.new("uv_fs_t"), nil ---@cast cb ffi.cb*
+    cb = cast("uv_fs_cb", function(_)
+        local err = check(libuv.uv_fs_get_result(req))
+        libuv.uv_fs_req_cleanup(req);
+        cb:free()
+        return callback and callback(err)
+    end)
+    return check(libuv.uv_fs_close(self, req, fd, cb))
+end
+
+---Read the entire contents of a file
+---@param fd number
+---@param callback fun(contents: string?, err: string?)
+---@return string? error
+function Loop:fs_read(fd, callback)
+    local offset, contents = 0, {}
+    local buf = ffi.new("uv_buf_t") ---@cast buf Buffer
+    buf.len = 1024
+    buf.base = ffi.new("char[?]", buf.len)
+    local req, cb = ffi.new("uv_fs_t"), nil ---@cast cb ffi.cb*
+    cb = cast("uv_fs_cb", function(_)
+        local result = libuv.uv_fs_get_result(req)
+        libuv.uv_fs_req_cleanup(req);
+        if result > 0 then
+            table.insert(contents, ffi.string(buf.base, result))
+            offset = offset + result
+            libuv.uv_fs_read(self, req, fd, buf, 1, offset, cb)
+            return -- keep reading
+        end
+        cb:free()
+        local err = check(result)
+        return callback and callback(not err and table.concat(contents) or nil, err)
+    end)
+    return check(libuv.uv_fs_read(self, req, fd, buf, 1, offset, cb))
 end
 
 ffi.cdef([[
@@ -657,13 +860,13 @@ ffi.cdef([[
 ---@field timer_cb ffi.cb*
 
 ---Return cache for handle
----@return Cache|nil
+---@return Cache?
 function Handle:get_cache()
     return pointer(cast("cache_t*", libuv.uv_handle_get_data(cast("const uv_handle_t*", self))))
 end
 
 ---Set cache for handle
----@param cache Cache|nil
+---@param cache Cache?
 function Handle:set_cache(cache)
     libuv.uv_handle_set_data(cast("uv_handle_t*", self), cache)
 end
@@ -679,8 +882,8 @@ end
 
 ---Cache a function as a FFI callback
 ---@param name string cache_t struct member
----@param callback function|nil function to save or delete
----@return ffi.cb*|nil
+---@param callback function? function to save or delete
+---@return ffi.cb*?
 function Handle:cache_callback(name, callback)
     local cache = self:get_cache()
     if callback then

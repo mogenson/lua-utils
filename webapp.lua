@@ -71,35 +71,36 @@ local function home(request) ---@diagnostic disable-line:unused-local
     local html = Html(nil, {
         Head(nil, {
             Title(nil, "NextBus"),
-            Meta()
-                :addAttribute("name='viewport'")
-                :addAttribute("content='width=device-width, initial-scale=1'"),
-            Link()
-                :addAttribute("rel='stylesheet'")
-                :addAttribute("href='https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.min.css'"),
-            Script({ "src='https://cdn.jsdelivr.net/npm/htmx.org@2/dist/htmx.min.js'" }),
+            Meta({ name = "viewport", content = "width=device-width, initial-scale=1", }),
+            Link({
+                rel = "stylesheet",
+                href = "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.min.css",
+            }),
+            Script({ src = "https://cdn.jsdelivr.net/npm/htmx.org@2/dist/htmx.min.js" }),
         }),
         Body(nil, {
             Header(nil, H1(nil, "Arrivals")),
             Main(nil, {
-                Pre()
-                    :addAttribute("id='arrivals'")
-                    :addAttribute("hx-get='/arrivals'")
-                    :addAttribute("hx-trigger='load'")
-                    :setContent("Loading arrival times..."),
-                P({ "id='last-update'" }, "Waiting for update..."),
+                Pre({ id = "arrivals", "hx-get='/arrivals'", "hx-trigger='load'" },
+                    "Loading arrival times..."
+                ),
+                P({ id = "last-update" },
+                    "Waiting for update..."
+                ),
                 Br(),
-                Input()
-                    :addAttribute("type='button'")
-                    :addAttribute("value='Refresh'")
-                    :addAttribute("hx-get='/arrivals'")
-                    :addAttribute("hx-target='#arrivals'")
-                    :addAttribute("hx-swap='innerHTML'"),
-                Input()
-                    :addAttribute("type='button'")
-                    :addAttribute("value='Close'")
-                    :addAttribute("hx-post='/shutdown'")
-                    :addAttribute("hx-on::after-request='window.close()'"),
+                Input({
+                    type = "button",
+                    value = "Refresh",
+                    "hx-get='/arrivals'",
+                    "hx-target='#arrivals'",
+                    "hx-swap='innerHTML'",
+                }),
+                Input({
+                    type = "button",
+                    value = "Close",
+                    "hx-post='/shutdown'",
+                    "hx-on::after-request='window.close()'",
+                }),
             }),
             Hr(),
             Footer(nil, {
@@ -129,10 +130,8 @@ local function arrivals(request) ---@diagnostic disable-line:unused-local
     })))
     local date = os.date("*t")
     local now = (date.hour * 3600) + (date.min * 60) + date.sec
-    local updated = Div()
-        :addAttribute("id='last-update'")
-        :addAttribute("hx-swap-oob='true'")
-        :setContent(("Last updated: %2d:%02d:%02d"):format(date.hour, date.min, date.sec))
+    local updated = Div({ id = "last-update", "hx-swap-oob='true'", },
+        ("Last updated: %2d:%02d:%02d"):format(date.hour, date.min, date.sec))
 
     return Response(([[
 Teele Square
