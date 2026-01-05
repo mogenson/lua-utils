@@ -1,10 +1,10 @@
 local class = require("pl.class")
 
 ---@alias Tag string
----@alias Attribute string
----@alias Attributes [Attribute]
+---@alias Attribute string|{[string]:any}
+---@alias Attributes Attribute[]
 ---@alias ContentProvider string|Element|fun():string
----@alias Content ContentProvider|[ContentProvider]
+---@alias Content ContentProvider|ContentProvider[]
 
 ---An HTML element
 ---@class Element
@@ -28,7 +28,7 @@ end
 ---Generate output string for content
 ---@param content Content
 ---@return string
-local function stringify(content)
+local function render_content(content)
     if type(content) == "string" then
         return content
     elseif Element:class_of(content) then
@@ -38,12 +38,24 @@ local function stringify(content)
     elseif type(content) == "table" then
         local html = {}
         for _, c in ipairs(content) do
-            table.insert(html, stringify(c))
+            table.insert(html, render_content(c))
         end
         return table.concat(html)
     end
 
     return ""
+end
+
+local function render_attributes(attributes)
+    local html = {}
+    for key, value in pairs(attributes) do
+        if type(key) == "number" then
+            table.insert(html, string.format(" %s", value))
+        else
+            table.insert(html, string.format(" %s='%s'", key, value))
+        end
+    end
+    return table.concat(html)
 end
 
 ---A void type HTML element
@@ -71,7 +83,17 @@ end
 ---@param attribute Attribute
 ---@return Void
 function Element.Void:addAttribute(attribute)
-    table.insert(self.attributes, attribute)
+    if type(attribute) == "string" then
+        table.insert(self.attributes, attribute)
+    elseif type(attribute) == "table" then
+        for key, value in pairs(attribute) do
+            if type(key) == "number" then
+                table.insert(self.attributes, value)
+            else
+                self.attributes[key] = value
+            end
+        end
+    end
     return self -- allow method chaining
 end
 
@@ -80,9 +102,7 @@ end
 function Element.Void:render()
     local html = {}
     table.insert(html, string.format("<%s", self.tag))
-    for _, attribute in ipairs(self.attributes) do
-        table.insert(html, string.format(" %s", attribute))
-    end
+    table.insert(html, render_attributes(self.attributes))
     table.insert(html, ">")
     return table.concat(html)
 end
@@ -116,11 +136,9 @@ end
 function Element.Container:render()
     local html = {}
     table.insert(html, string.format("<%s", self.tag))
-    for _, attribute in ipairs(self.attributes) do
-        table.insert(html, string.format(" %s", attribute))
-    end
+    table.insert(html, render_attributes(self.attributes))
     table.insert(html, ">")
-    table.insert(html, stringify(self.content))
+    table.insert(html, render_content(self.content))
     table.insert(html, string.format("</%s>", self.tag))
     return table.concat(html)
 end
