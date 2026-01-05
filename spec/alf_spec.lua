@@ -101,7 +101,7 @@ describe("Application", function()
             end
         end
 
-        app(scope, receive, send)
+        app:run(scope, receive, send)
     end)
 
     it("should return 404 Not Found for an invalid route", function()
@@ -115,7 +115,7 @@ describe("Application", function()
             end
         end
 
-        app(scope, receive, send)
+        app:run(scope, receive, send)
     end)
 
     it("should return 405 Method Not Allowed for a mismatched method", function()
@@ -130,7 +130,7 @@ describe("Application", function()
             end
         end
 
-        app(scope, receive, send)
+        app:run(scope, receive, send)
     end)
 end)
 
@@ -147,7 +147,7 @@ describe("Parser", function()
         end)
 
         local parser = Parser()
-        local scope, err = a.block(parser(read))
+        local scope, err = a.block(parser:parse(read))
 
         assert.is_nil(err)
         assert.are.equal("POST", scope.method)
@@ -182,7 +182,7 @@ describe("E2E", function()
             end
         )
 
-        server(host, port)
+        server:serve(host, port)
 
         assert.are.equal("test content", table.concat(content))
     end)
@@ -209,7 +209,7 @@ describe("E2E", function()
             end
         )
 
-        server(host, port)
+        server:serve(host, port)
 
         assert.are.equal(request_content, table.concat(response_content))
     end)
