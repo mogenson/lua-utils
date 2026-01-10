@@ -23,6 +23,86 @@ describe("timer", function()
         loop:run()
         assert(result >= 1000)
     end)
+
+    it("recurring", function()
+        local count = 0
+        local t = assert(loop:timer())
+        t:recurring(10, function()
+            count = count + 1
+            if count >= 3 then
+                t:stop()
+                t:close()
+            end
+        end)
+        loop:run()
+        assert.are.equal(3, count)
+    end)
+end)
+
+describe("fs", function()
+    it("stat", function()
+        local stat = a.wrap(function(path, cb)
+            loop:fs_stat(path, cb)
+        end)
+
+        local mode = nil
+        a.run(stat("libuv.lua"), function(val) mode = val end)
+        loop:run()
+
+        assert.is_number(mode)
+        assert(loop.S_ISREG(mode))
+        assert(not loop.S_ISDIR(mode))
+    end)
+
+    it("scandir", function()
+        local scandir = a.wrap(function(path, cb)
+            loop:fs_scandir(path, cb)
+        end)
+
+        local entries = nil
+        a.run(scandir("."), function(val) entries = val end)
+        loop:run()
+
+        assert.is_table(entries)
+        local found = false
+        for _, entry in ipairs(entries) do
+            if entry.name == "libuv.lua" then
+                found = true
+                break
+            end
+        end
+        assert.is_true(found)
+    end)
+
+    it("read file", function()
+        local open = a.wrap(function(path, cb) loop:fs_open(path, cb) end)
+        local read = a.wrap(function(fd, cb) loop:fs_read(fd, cb) end)
+        local close = a.wrap(function(fd, cb) loop:fs_close(fd, cb) end)
+
+        local content = nil
+        local main = a.sync(function()
+            local fd = a.wait(open("libuv.lua"))
+            content = a.wait(read(fd))
+            a.wait(close(fd))
+        end)
+
+        a.run(main())
+        loop:run()
+
+        assert.is_string(content)
+        assert.matches("ffi", content)
+    end)
+end)
+
+describe("misc", function()
+    it("now", function()
+        local t1 = loop:now()
+        assert.is_number(t1)
+        assert.is_true(t1 > 0)
+        loop:update_time()
+        local t2 = loop:now()
+        assert.is_true(t2 >= t1)
+    end)
 end)
 
 describe("pipe", function()
