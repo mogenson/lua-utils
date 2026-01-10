@@ -47,10 +47,10 @@ describe("pipe", function()
         end)
 
         local server = a.sync(function()
-            local server_pipe = loop:pipe()
+            local server_pipe = assert(loop:pipe())
             server_pipe:bind(name)
             a.wait(listen(server_pipe, 1))
-            local echo_pipe = loop:pipe()
+            local echo_pipe = assert(loop:pipe())
             server_pipe:accept(echo_pipe)
 
             while true do
@@ -66,7 +66,7 @@ describe("pipe", function()
         end)
 
         local client = a.sync(function()
-            local client_pipe = loop:pipe()
+            local client_pipe = assert(loop:pipe())
             a.wait(connect(client_pipe, name))
 
             local number = 1
@@ -82,7 +82,7 @@ describe("pipe", function()
                 a.wait(write(client_pipe, string.char(number)))
             end
 
-            client_pipe:close()
+            client_pipe:shutdown()
             return number
         end)
 
@@ -109,7 +109,7 @@ describe("socket", function()
         local listen = a.wrap(function(socket, backlog, cb)
             socket:listen(backlog, cb)
         end)
-        local connect = a.wrap(function(socket, host, port, cb)
+        local connect = a.wrap(function(socket, host, port, cb) ---@diagnostic disable-line:redefined-local
             socket:connect(host, port, cb)
         end)
         local write = a.wrap(function(socket, data, cb)
@@ -123,10 +123,10 @@ describe("socket", function()
         end)
 
         local server = a.sync(function()
-            local server_socket = loop:tcp()
+            local server_socket = assert(loop:tcp())
             server_socket:bind(host, port)
             a.wait(listen(server_socket, 1))
-            local echo_socket = loop:tcp()
+            local echo_socket = assert(loop:tcp())
             server_socket:accept(echo_socket)
 
             while true do
@@ -142,7 +142,7 @@ describe("socket", function()
         end)
 
         local client = a.sync(function()
-            local client_socket = loop:tcp()
+            local client_socket = assert(loop:tcp())
             a.wait(connect(client_socket, host, port))
 
             local number = 1
@@ -158,7 +158,7 @@ describe("socket", function()
                 a.wait(write(client_socket, string.char(number)))
             end
 
-            client_socket:close()
+            client_socket:shutdown()
             return number
         end)
 

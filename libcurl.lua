@@ -105,7 +105,7 @@ end
 local curl = {
     multi = assert(libcurl.curl_multi_init()), ---@type curlm
     polls = {}, ---@type { [number]: Poll }
-    timer = loop:timer(), ---@type Timer
+    timer = assert(loop:timer()), ---@type Timer
     handles = {} ---@type { [number]: cache }
 }
 
@@ -159,7 +159,7 @@ libcurl.curl_multi_setopt(curl.multi, libcurl.CURLMOPT_SOCKETFUNCTION,
 
         local poll = curl.polls[fd]
         if not poll then
-            poll = loop:poll(fd)
+            poll = assert(loop:poll(fd))
             curl.polls[fd] = poll
         end
 

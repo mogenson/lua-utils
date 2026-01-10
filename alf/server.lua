@@ -68,11 +68,11 @@ end
 ---@param port number
 ---@return boolean true if there are no active handles on stop
 function Server:serve(host, port)
-    self.tcp = loop:tcp()
+    self.tcp = assert(loop:tcp())
     self.tcp:bind(host, port)
 
     self.tcp:listen(1, function()
-        local client = loop:tcp()
+        local client = assert(loop:tcp())
         self.tcp:accept(client)
         a.run(on_connection(client, self.app))
     end)
