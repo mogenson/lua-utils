@@ -180,11 +180,6 @@ local Handle = {}
 Handle.__index = Handle
 ffi.metatype(ffi.typeof("uv_handle_t"), Handle)
 
----@type ffi.cb*
-local close_cb = cast("uv_close_cb", function(handle)
-    Handle.free_cache(handle)
-end)
-
 function Handle.__tostring(self)
     local id = libuv.uv_handle_get_type(cast("uv_handle_t*", self))
     return string.format("%s: %d", ffi.string(libuv.uv_handle_type_name(id)), address(self))
@@ -199,7 +194,19 @@ end
 ---Close a libuv handle
 function Handle:close()
     if not self:closed() then
-        libuv.uv_close(cast("uv_handle_t*", self), close_cb)
+        local closed, cb = false, nil ---@cast cb ffi.cb*
+        cb = cast("uv_close_cb", function(_)
+            closed = true
+            cb:free()
+        end)
+
+        libuv.uv_close(cast("uv_handle_t*", self), cb)
+
+        repeat
+            libuv.uv_run(libuv.uv_default_loop(), libuv.UV_RUN_ONCE)
+        until closed
+
+        Handle.free_cache(self)
     end
 end
 

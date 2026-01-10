@@ -82,7 +82,7 @@ describe("pipe", function()
                 a.wait(write(client_pipe, string.char(number)))
             end
 
-            client_pipe:close()
+            client_pipe:shutdown()
             return number
         end)
 
@@ -158,7 +158,7 @@ describe("socket", function()
                 a.wait(write(client_socket, string.char(number)))
             end
 
-            client_socket:close()
+            client_socket:shutdown()
             return number
         end)
 
