@@ -220,6 +220,9 @@ end
 function Handle:make_cache()
     assert(self:get_cache() == nil)
     local cache = assert(pointer(cast("cache_t*", ffi.C.malloc(ffi.sizeof("cache_t")))))
+    cache.buf.base = nil
+    cache.buf.len = 0
+    cache.cb = nil
     self:set_cache(cache)
 end
 
@@ -262,11 +265,11 @@ function Handle:close()
     if not self:closed() then
         local closed, cb = false, nil ---@cast cb ffi.cb*
         cb = cast("uv_close_cb", function(_)
+            self:free_cache()
             closed = true
             cb:free()
         end)
         libuv.uv_close(cast("uv_handle_t*", self), cb)
-        Handle.free_cache(self)
         repeat
             libuv.uv_run(libuv.uv_default_loop(), libuv.UV_RUN_ONCE)
         until closed
@@ -546,6 +549,7 @@ function Stream:shutdown(callback)
     local req = ffi.new("uv_shutdown_t")
     local cb = self:cache_callback(cast("uv_shutdown_cb", function(_, status)
         self:cache_callback(nil)
+        local _ = req
         return callback and callback(check(status))
     end))
     return check(libuv.uv_shutdown(req, handle, cb))
@@ -614,6 +618,7 @@ function Stream:write(data, callback)
     local req = ffi.new("uv_write_t")
     local cb = self:cache_callback(cast("uv_write_cb", function(_, status)
         self:cache_callback(nil)
+        local _, _, _ = req, buf, data
         return callback and callback(check(status))
     end))
     return check(libuv.uv_write(req, handle, buf, 1, cb))
@@ -662,6 +667,7 @@ function Tcp:connect(host, port, callback)
     local req = ffi.new("uv_connect_t")
     local cb = self:cache_callback(cast("uv_connect_cb", function(_, status)
         self:cache_callback(nil)
+        local _ = req
         return callback and callback(check(status))
     end))
     return check(libuv.uv_tcp_connect(req, self, addr, cb))
@@ -701,6 +707,7 @@ function Pipe:connect(name, callback)
     local req = ffi.new("uv_connect_t")
     local cb = self:cache_callback(cast("uv_connect_cb", function(_, status)
         self:cache_callback(nil)
+        local _ = req
         return callback and callback(check(status))
     end))
     libuv.uv_pipe_connect(req, self, name, cb)
