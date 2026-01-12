@@ -50,6 +50,7 @@ describe("fs", function()
         loop:run()
 
         assert.is_number(mode)
+        mode = assert(mode)
         assert(loop.S_ISREG(mode))
         assert(not loop.S_ISDIR(mode))
     end)
@@ -65,7 +66,7 @@ describe("fs", function()
 
         assert.is_table(entries)
         local found = false
-        for _, entry in ipairs(entries) do
+        for _, entry in ipairs(assert(entries)) do
             if entry.name == "libuv.lua" then
                 found = true
                 break
@@ -90,7 +91,7 @@ describe("fs", function()
         loop:run()
 
         assert.is_string(content)
-        assert.matches("ffi", content)
+        assert.matches("ffi", assert(content))
     end)
 end)
 
