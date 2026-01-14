@@ -15,7 +15,7 @@ CURLOPT_WRITEFUNCTION = 20011
 
 local function http_get(url)
     local response = {}
-    local curl = assert(libcurl.curl_easy_init())
+    local curl = assert(libcurl.curl_easy_init()) ---@type ffi.cdata*
     libcurl.curl_easy_setopt(curl, CURLOPT_URL, url)
     libcurl.curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION,
         ---@diagnostic disable-next-line:unused-local
@@ -23,7 +23,7 @@ local function http_get(url)
             table.insert(response, ffi.string(buffer, size * nitems))
             return nitems
         end))
-    local ret = libcurl.curl_easy_perform(curl)
+    local ret = libcurl.curl_easy_perform(curl) ---@type number
     libcurl.curl_easy_cleanup(curl)
     return table.concat(response), ret
 end

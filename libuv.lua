@@ -139,12 +139,12 @@ local cast = setmetatable({}, {
     ---@param self table
     ---@param typedef string C type definition
     ---@param object any object to cast
-    ---@return cdata c
+    ---@return ffi.cdata*
     __call = function(self, typedef, object)
-        local typeobj = self[typedef]
+        local typeobj = self[typedef] ---@type ffi.ctype*
         if not typeobj then
             typeobj = ffi.typeof(typedef)
-            self[typedef] = typeobj
+            self[typedef] = typeobj ---@type ffi.ctype*
         end
         return ffi.cast(typeobj, object)
     end
@@ -155,7 +155,7 @@ local cast = setmetatable({}, {
 ---@param p T
 ---@return T?
 local function pointer(p)
-    return p == nil and nil or p
+    return p ~= nil and p or nil
 end
 
 ---Return the address of a pointer or cdata
@@ -200,7 +200,7 @@ Handle.__index = Handle
 ffi.metatype(ffi.typeof("uv_handle_t"), Handle)
 
 function Handle.__tostring(self)
-    local id = libuv.uv_handle_get_type(cast("uv_handle_t*", self))
+    local id = libuv.uv_handle_get_type(cast("uv_handle_t*", self)) ---@type number
     return string.format("%s: %d", ffi.string(libuv.uv_handle_type_name(id)), address(self))
 end
 
@@ -219,7 +219,7 @@ end
 ---Allocate a new cache for handle
 function Handle:make_cache()
     assert(self:get_cache() == nil)
-    local cache = assert(pointer(cast("cache_t*", ffi.C.malloc(ffi.sizeof("cache_t")))))
+    local cache = assert(pointer(cast("cache_t*", ffi.C.malloc(ffi.sizeof("cache_t"))))) ---@type Cache
     cache.buf.base = nil
     cache.buf.len = 0
     cache.cb = nil
@@ -264,7 +264,7 @@ end
 function Handle:close()
     if not self:closed() then
         local closed, cb = false, nil ---@cast cb ffi.cb*
-        cb = cast("uv_close_cb", function(_)
+        cb = cast("uv_close_cb", function(_) ---@type ffi.cb*
             self:free_cache()
             closed = true
             cb:free()
@@ -500,7 +500,7 @@ end
 ---Return the request type as a string
 ---@return string
 function Request.__tostring(self)
-    local id = libuv.uv_req_get_type(cast("uv_req_t*", self))
+    local id = libuv.uv_req_get_type(cast("uv_req_t*", self)) ---@type number
     return ffi.string(libuv.uv_req_type_name(id))
 end
 
@@ -545,7 +545,7 @@ ffi.metatype(ffi.typeof("uv_stream_t"), { __index = Stream, __tostring = Handle.
 ---@param callback fun(err: string?)?
 ---@return string? error
 function Stream:shutdown(callback)
-    local handle = cast("uv_stream_t*", self)
+    local handle = cast("uv_stream_t*", self) ---@type Stream
     local req = ffi.new("uv_shutdown_t")
     local cb = self:cache_callback(cast("uv_shutdown_cb", function(_, status)
         self:cache_callback(nil)
@@ -560,7 +560,7 @@ end
 ---@param callback fun(err: string?)
 ---@return string? error
 function Stream:listen(backlog, callback)
-    local stream = cast("uv_stream_t*", self)
+    local stream = cast("uv_stream_t*", self) ---@type Stream
     local cb = self:cache_callback(cast("uv_connection_cb", function(_, status)
         return callback and callback(check(status))
     end))
@@ -571,8 +571,9 @@ end
 ---@param client Stream
 ---@return string? error
 function Stream:accept(client)
-    local server = cast("uv_stream_t*", self)
-    local client = cast("uv_stream_t*", client) ---@diagnostic disable-line:redefined-local
+    local server = cast("uv_stream_t*", self) ---@type Stream
+    ---@diagnostic disable-next-line:redefined-local
+    local client = cast("uv_stream_t*", client) ---@type Stream
     return check(libuv.uv_accept(server, client))
 end
 
@@ -580,7 +581,7 @@ end
 ---@param callback fun(data: string?, err: string?)
 ---@return string? error
 function Stream:read_start(callback)
-    local stream = cast("uv_stream_t*", self)
+    local stream = cast("uv_stream_t*", self) ---@type Stream
     local cb = self:cache_callback(cast("uv_read_cb",
         ---Process internal read callback
         ---@param nread number
@@ -611,7 +612,7 @@ end
 ---@param callback fun(err: string?)?
 ---@return string? error
 function Stream:write(data, callback)
-    local handle = cast("uv_stream_t*", self)
+    local handle = cast("uv_stream_t*", self) ---@type Stream
     local buf = ffi.new("uv_buf_t") ---@cast buf Buffer
     buf.base = cast("char*", data)
     buf.len = #data
@@ -786,13 +787,20 @@ ffi.cdef([[
 ---@field type number|ffi.cdata*
 ---@field name string|ffi.cdata*
 
+---@class Entry
+---@field type number
+---@field name string
+
+---@class Stat: ffi.cdata*
+---@field st_mode number
+
 ---Scan directory and collect list of contents
 ---@param path string path to directory
----@param callback fun(entries: { type: number, name: string }[]?, err: string?)
+---@param callback fun(entries: Entry[]?, err: string?)
 ---@return string? error
 function Loop:fs_scandir(path, callback)
     local req, cb = ffi.new("uv_fs_t"), nil ---@cast cb ffi.cb*
-    cb = cast("uv_fs_cb", function(_)
+    cb = cast("uv_fs_cb", function(_) ---@type ffi.cb*
         local entries = nil
         local err = check(libuv.uv_fs_get_result(req))
         if not err then
@@ -832,11 +840,11 @@ end
 ---@return string? error
 function Loop:fs_stat(path, callback)
     local req, cb = ffi.new("uv_fs_t"), nil ---@cast cb ffi.cb*
-    cb = cast("uv_fs_cb", function(_)
+    cb = cast("uv_fs_cb", function(_) ---@type ffi.cb*
         local mode = nil
         local err = check(libuv.uv_fs_get_result(req))
         if not err then
-            local stat = libuv.uv_fs_get_statbuf(req);
+            local stat = libuv.uv_fs_get_statbuf(req); ---@type Stat
             mode = tonumber(stat.st_mode)
         end
         libuv.uv_fs_req_cleanup(req);
@@ -852,8 +860,8 @@ end
 ---@return string? error
 function Loop:fs_open(path, callback)
     local req, cb = ffi.new("uv_fs_t"), nil ---@cast cb ffi.cb*
-    cb = cast("uv_fs_cb", function(_)
-        local result = libuv.uv_fs_get_result(req)
+    cb = cast("uv_fs_cb", function(_) ---@type ffi.cb*
+        local result = libuv.uv_fs_get_result(req) ---@type number
         local err = check(result)
         libuv.uv_fs_req_cleanup(req);
         cb:free()
@@ -868,7 +876,7 @@ end
 ---@return string? error
 function Loop:fs_close(fd, callback)
     local req, cb = ffi.new("uv_fs_t"), nil ---@cast cb ffi.cb*
-    cb = cast("uv_fs_cb", function(_)
+    cb = cast("uv_fs_cb", function(_) ---@type ffi.cb*
         local err = check(libuv.uv_fs_get_result(req))
         libuv.uv_fs_req_cleanup(req);
         cb:free()
@@ -887,8 +895,8 @@ function Loop:fs_read(fd, callback)
     buf.len = 1024
     buf.base = ffi.new("char[?]", buf.len)
     local req, cb = ffi.new("uv_fs_t"), nil ---@cast cb ffi.cb*
-    cb = cast("uv_fs_cb", function(_)
-        local result = libuv.uv_fs_get_result(req)
+    cb = cast("uv_fs_cb", function(_) ---@type ffi.cb*
+        local result = libuv.uv_fs_get_result(req) ---@type number
         libuv.uv_fs_req_cleanup(req);
         if result > 0 then
             table.insert(contents, ffi.string(buf.base, result))

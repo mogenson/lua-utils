@@ -14,11 +14,11 @@ local SUPPORTED_METHODS = { "GET", "POST", "HEAD", "DELETE", "PUT", "PATCH" }
 -- These are the versions supported by ASGI HTTP 2.3.
 local SUPPORTED_VERSIONS = { "1.0", "1.1", "2" }
 
----@class Parser An HTTP 1.1 Parser
----@field parse function
+---@class Parser: pl.Class  An HTTP 1.1 Parser
 ---@field INVALID_REQUEST_LINE number
 ---@field METHOD_NOT_IMPLEMENTED number
 ---@field VERSION_NOT_SUPPORTED number
+---@operator call(...): Parser
 local Parser = class()
 
 -- Errors
@@ -37,8 +37,9 @@ Parser.VERSION_NOT_SUPPORTED = 3
 ---@return number|nil parsing error
 Parser.parse = a.sync(function(self, receive)
     local scope = Scope()
-    local data = a.wait(receive())
+    local data = a.wait(receive()) ---@type string
 
+    ---@type number?, number?, string?, string?, string?
     local _, finish, method, path, version = data:find(REQUEST_LINE_PATTERN)
     if not method then return scope, self.INVALID_REQUEST_LINE end
 
@@ -47,8 +48,8 @@ Parser.parse = a.sync(function(self, receive)
         return scope, self.METHOD_NOT_IMPLEMENTED
     end
 
-    scope.path = path
-    scope.version = version
+    scope.path = assert(path)
+    scope.version = assert(version)
     if not tablex.find(SUPPORTED_VERSIONS, version) then
         return scope, self.VERSION_NOT_SUPPORTED
     end
@@ -56,11 +57,14 @@ Parser.parse = a.sync(function(self, receive)
     local index, line = finish + 1, nil
     repeat
         if finish then index = finish + 1 end
+        ---@type number?, number?, string?
         _, finish, line = data:find("(.-)\r\n", index) -- parse line by line
         if line then
+            ---@type string?, string?
             local key, value = line:match("^(.-):%s*(.*)$")
             if key and value then scope.headers[key] = value end
         else
+            ---@type string
             data = data .. a.wait(receive()) -- read more data
         end
     until line == ""                         -- end of metadata

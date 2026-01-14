@@ -1,3 +1,5 @@
+---@diagnostic disable: unused-local
+
 local objc = require("objc")
 local ffi = require("ffi")
 local bit = require("bit")
@@ -28,11 +30,11 @@ local NSWindowStyleMaskResizable = ffi.new("NSUInteger", bit.lshift(1, 3))
 
 local NSStackViewGravityTop = ffi.new("NSInteger", 1)
 local NSStackViewGravityLeading = ffi.new("NSInteger", 1)
-local NSStackViewGravityCenter = ffi.new("NSInteger", 2)
+local NSStackViewGravityCenter = ffi.new("NSInteger", 2) ---@diagnostic disable-line: unused-local
 local NSStackViewGravityBottom = ffi.new("NSInteger", 3)
 local NSStackViewGravityTrailing = ffi.new("NSInteger", 3)
 
-local NSUserInterfaceLayoutOrientationHorizontal = ffi.new("NSInteger", 0)
+local NSUserInterfaceLayoutOrientationHorizontal = ffi.new("NSInteger", 0) ---@diagnostic disable-line: unused-local
 local NSUserInterfaceLayoutOrientationVertical = ffi.new("NSInteger", 1)
 
 local NO = ffi.new("BOOL", 0)
@@ -47,17 +49,17 @@ end
 local scrollView = nil -- forward declaration
 
 local function appendString(str)
-    local textView = assert(scrollView).documentView
-    local contents = textView.string
+    local textView = assert(scrollView).documentView ---@type id
+    local contents = textView.string ---@type id
     textView.string = contents:stringByAppendingString(NSStr("\n" .. str))
     textView:scrollToEndOfDocument(textView)
 end
 
 objc.loadFramework("AppKit")
 
-local pool = objc.NSAutoreleasePool:alloc():init()
+local pool = objc.NSAutoreleasePool:alloc():init() ---@type id
 
-local NSApp = objc.NSApplication:sharedApplication()
+local NSApp = objc.NSApplication:sharedApplication() ---@type id
 assert(NSApp:setActivationPolicy(NSApplicationActivationPolicyRegular) == YES)
 
 local AppDelegateClass = objc.newClass("AppDelegate")
@@ -76,24 +78,26 @@ objc.addMethod(AppDelegateClass, button_action_selector, "v@:@",
         i = i + 1
     end)
 
-local appDelegate = objc.AppDelegate:alloc():init()
+local appDelegate = objc.AppDelegate:alloc():init() ---@type id
 appDelegate:autorelease()
 NSApp:setDelegate(appDelegate)
 
-local menubar = objc.NSMenu:alloc():init()
+local menubar = objc.NSMenu:alloc():init() ---@type id
 menubar:autorelease()
-local appMenuItem = objc.NSMenuItem:alloc():init()
+local appMenuItem = objc.NSMenuItem:alloc():init() ---@type id
 appMenuItem:autorelease()
 menubar:addItem(appMenuItem)
 NSApp:setMainMenu(menubar)
-local appMenu = objc.NSMenu:alloc():init()
+local appMenu = objc.NSMenu:alloc():init() ---@type id
 appMenu:autorelease()
 
+---@type id
 local quitMenuItem = objc.NSMenuItem:alloc():initWithTitle_action_keyEquivalent(NSStr("Quit"), "terminate:",
     NSStr("q"))
 quitMenuItem:autorelease()
 appMenu:addItem(quitMenuItem)
 
+---@type id
 local closeMenuItem = objc.NSMenuItem:alloc():initWithTitle_action_keyEquivalent(NSStr("Close"), "performClose:",
     NSStr("w"))
 closeMenuItem:autorelease()
@@ -101,32 +105,34 @@ appMenu:addItem(closeMenuItem)
 
 appMenuItem:setSubmenu(appMenu)
 
+---@type ffi.cdata*
 local rect = ffi.new("CGRect", { origin = { x = 0, y = 0 }, size = { width = 200, height = 300 } })
 ---@diagnostic disable: param-type-mismatch
 local styleMask = bit.bor(NSWindowStyleMaskTitled, NSWindowStyleMaskClosable,
     NSWindowStyleMaskMiniaturizable, NSWindowStyleMaskResizable)
+---@type id
 ---@diagnostic enable: param-type-mismatch
 local window = objc.NSWindow:alloc():initWithContentRect_styleMask_backing_defer(rect, styleMask,
     NSBackingStoreBuffered, NO)
 window:autorelease()
 
-local textField = objc.NSTextField:alloc():init()
+local textField = objc.NSTextField:alloc():init() ---@type id
 textField.placeholderString = NSStr("Enter Lua Code...")
-local button = objc.NSButton:buttonWithTitle_target_action(NSStr("Eval"), appDelegate, button_action_selector)
+local button = objc.NSButton:buttonWithTitle_target_action(NSStr("Eval"), appDelegate, button_action_selector) ---@type id
 
-local hStack = objc.NSStackView:alloc():init()
+local hStack = objc.NSStackView:alloc():init() ---@type id
 hStack:autorelease()
 hStack:addView_inGravity(textField, NSStackViewGravityLeading)
 hStack:addView_inGravity(button, NSStackViewGravityTrailing)
 
-scrollView = objc.NSTextView:scrollableTextView()
+scrollView = objc.NSTextView:scrollableTextView() ---@type id
 scrollView.documentView.editable = NO
 scrollView:autorelease()
 
-local vStack = objc.NSStackView:alloc():init()
+local vStack = objc.NSStackView:alloc():init() ---@type id
 vStack:autorelease()
 vStack.orientation = NSUserInterfaceLayoutOrientationVertical
-vStack.edgeInsets = ffi.new("NSEdgeInsets", { top = 10, left = 10, bottom = 10, right = 10 })
+vStack.edgeInsets = ffi.new("NSEdgeInsets", { top = 10, left = 10, bottom = 10, right = 10 }) ---@type ffi.cdata*
 vStack:addView_inGravity(scrollView, NSStackViewGravityTop)
 vStack:addView_inGravity(hStack, NSStackViewGravityBottom)
 

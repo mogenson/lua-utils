@@ -1,5 +1,3 @@
----@diagnostic disable undefined-field
-
 local objc = require("objc")
 local ffi = require("ffi")
 
@@ -28,8 +26,8 @@ describe("objc", function()
     end)
 
     it("should send a message to an instance", function()
-        local pool = objc.NSAutoreleasePool:alloc():init()
-        local obj = objc.NSObject:alloc():init()
+        local pool = objc.NSAutoreleasePool:alloc():init() ---@type id
+        local obj = objc.NSObject:alloc():init() ---@type id
         local description = obj.description
         assert.is_not_nil(description)
         assert.is_not_nil(ffi.string(description:UTF8String()):match("^<NSObject: 0x[0-9a-f]+>$"))
@@ -41,7 +39,7 @@ describe("objc", function()
         assert.is_not_nil(MyClass)
         assert.are.equal("MyClass", tostring(MyClass))
 
-        local instance = MyClass:alloc():init()
+        local instance = MyClass:alloc():init() ---@type id
         assert.is_not_nil(instance)
 
         local function myMethod(self, cmd)
@@ -51,13 +49,13 @@ describe("objc", function()
         end
         objc.addMethod(MyClass, "myMethod", "i@:", myMethod)
 
-        local result = instance:myMethod()
+        local result = instance:myMethod() ---@type number
         assert.are.equal(42, result)
     end)
 
     it("can swizzle class method", function()
         local MyOtherClass = objc.newClass("MyOtherClass", "NSObject")
-        local instance = MyOtherClass:alloc():init()
+        local instance = MyOtherClass:alloc():init() ---@type id
 
         local MyOtherMethod = objc.addMethod(
             MyOtherClass, "myOtherMethod", "i@:",

@@ -68,13 +68,18 @@ ffi.cdef([[
     typedef size_t (*write_callback)(char* ptr, size_t size, size_t nmemb, void* userdata);
 ]])
 
----@alias curl cdata
----@alias curlm cdata
+---@alias curl ffi.cdata*
+---@alias curlm ffi.cdata*
 ---@alias callback fun(data: string|nil, err: string|nil)
 
 ---@class cache
 ---@field data string[]
 ---@field callback callback
+
+---@class curl_msg
+---@field msg number
+---@field handle curl
+---@field result number
 
 local int = ffi.typeof("int[1]")
 libcurl.curl_global_init(libcurl.CURL_GLOBAL_ALL)
@@ -84,12 +89,12 @@ local cast = setmetatable({}, {
     ---@param self table
     ---@param typedef string C type definition
     ---@param object any object to cast
-    ---@return cdata c
+    ---@return ffi.cdata*
     __call = function(self, typedef, object)
-        local typeobj = self[typedef]
+        local typeobj = self[typedef] ---@type ffi.ctype*
         if not typeobj then
             typeobj = ffi.typeof(typedef)
-            self[typedef] = typeobj
+            self[typedef] = typeobj ---@type ffi.cdata*
         end
         return ffi.cast(typeobj, object)
     end
@@ -115,6 +120,7 @@ local curl = {
 ---@param nmemb number
 ---@param handle curl
 ---@return number
+---@type ffi.cb*
 local write_callback = cast("write_callback", function(ptr, size, nmemb, handle)
     local len = size * nmemb
     table.insert(curl.handles[address(handle)].data, ffi.string(ptr, len))
@@ -141,7 +147,7 @@ libcurl.curl_multi_setopt(curl.multi, libcurl.CURLMOPT_SOCKETFUNCTION,
 
             local msg = nil
             repeat
-                msg = libcurl.curl_multi_info_read(curl.multi, int())
+                msg = libcurl.curl_multi_info_read(curl.multi, int()) ---@type curl_msg?
                 if msg ~= nil and msg.msg == libcurl.CURLMSG_DONE then
                     libcurl.curl_multi_remove_handle(curl.multi, msg.handle)
                     libcurl.curl_easy_cleanup(msg.handle)
@@ -219,7 +225,7 @@ end
 ---@param url string
 ---@param callback callback
 local function get(url, callback)
-    local handle = assert(libcurl.curl_easy_init())
+    local handle = assert(libcurl.curl_easy_init()) ---@type curl
     add(handle, url, callback)
 end
 
@@ -228,7 +234,7 @@ end
 ---@param data string
 ---@param callback callback
 local function post(url, data, callback)
-    local handle = libcurl.curl_easy_init()
+    local handle = libcurl.curl_easy_init() ---@type curl
     libcurl.curl_easy_setopt(handle, libcurl.CURLOPT_POSTFIELDS, cast("char *", data))
     libcurl.curl_easy_setopt(handle, libcurl.CURLOPT_POSTFIELDSIZE, cast("long", #data))
     add(handle, url, callback)

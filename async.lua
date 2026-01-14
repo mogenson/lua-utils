@@ -44,7 +44,7 @@ end
 local function gather(futures)
     local total = #futures
     local finished = 0
-    local results = {}
+    local results = {} ---@type any[]
 
     return function(cb)
         if total == 0 then return cb and cb() end
@@ -74,7 +74,7 @@ local function select(futures)
             future(function(...)
                 if finished then return end
                 finished = true
-                local results = {}
+                local results = {} ---@type any[]
                 local params = table.pack(...)
                 results[i] = params.n <= 1 and params[1] or params
                 return cb and cb(results)
@@ -106,23 +106,37 @@ local function block(future)
     return table.unpack(results, 1, results.n)
 end
 
+---@class Queue
+---@field cb function?
+---@field q any[]
+---@field NIL table
+---@field get function(self: Queue, cb: function?)
+---@field put function(self: Queue, value: any)
+---@field iter function(self: Queue): fun(): any
+
 ---Returns an async queue.
--- It has regular put method and an async get method that can be awaited.
----@return table
+---It has regular put method and an async get method that can be awaited.
+---@return Queue
 local function queue()
-    return {
+    return { ---@type Queue
         cb = nil,
         q = {},
         NIL = {},
+        ---Get a value from the queue async
+        ---@param self Queue
+        ---@param cb function?
         get = wrap(function(self, cb)
             local value = table.remove(self.q)
             if value then
                 if value == self.NIL then value = nil end
-                return cb(value)
+                return cb and cb(value)
             else
                 self.cb = cb
             end
         end),
+        ---Put a value into the queue sync
+        ---@param self Queue
+        ---@param value any
         put = function(self, value)
             local cb = self.cb
             if cb then
@@ -133,6 +147,8 @@ local function queue()
                 table.insert(self.q, value)
             end
         end,
+        ---Iterate over values in the queue
+        ---@param self Queue
         iter = function(self)
             return function()
                 return await(self:get())
@@ -141,27 +157,53 @@ local function queue()
     }
 end
 
+---@class Sender
+---@field send fun(self: Sender, value: any, send_cb: function?)
+---@field rx Receiver?
+---@field default function?
+
+---@class Receiver
+---@field recv fun(self: Receiver, recv_cb: function?)
+---@field tx Sender?
+---@field default function?
+
 ---Returns a linked async channel sender and receiver.
 ---The channel transfers a single value at a time. The sender will await until
 ---the receiver reads and the receiver will await until the sender writes.
----@return table sender
----@return table receiver
+---@return Sender
+---@return Receiver
 local function channel()
-    local tx = {
+    local tx = { ---@type Sender
+        ---Send a value to the receiver async
+        ---@param self Sender
+        ---@param value any
+        ---@param send_cb function?
         send = wrap(function(self, value, send_cb)
+            ---Set the receivers recv function
+            ---@param self Receiver
+            ---@param recv_cb function?
+            ---@diagnostic disable-next-line: redefined-local
             self.rx.recv = wrap(function(self, recv_cb)
                 self.recv = self.default
-                send_cb()
-                return recv_cb(value)
+                if send_cb then send_cb() end
+                return recv_cb and recv_cb(value)
             end)
         end)
     }
-    local rx = {
+    local rx = { ---@type Receiver
+        ---Receive a value from the Sender async
+        ---@param self Receiver
+        ---@param recv_cb function?
         recv = wrap(function(self, recv_cb)
+            ---Set the senders send function
+            ---@param self Sender
+            ---@param value any
+            ---@param send_cb function?
+            ---@diagnostic disable-next-line: redefined-local
             self.tx.send = wrap(function(self, value, send_cb)
                 self.send = self.default
-                recv_cb(value)
-                return send_cb()
+                if recv_cb then recv_cb(value) end
+                return send_cb and send_cb()
             end)
         end)
     }

@@ -148,7 +148,10 @@ local function timerFired(cb)
 end
 
 -- async methods
+---@class Ble
 local Ble = {
+    ---@param self Ble
+    ---@return id
     makeDelegate = function(self)
         local class = objc.newClass("CentralManagerDelegate")
 
@@ -182,42 +185,82 @@ local Ble = {
         return objc.CentralManagerDelegate:alloc():init()
     end,
 
+    ---Init Bluetooth
+    ---@param self Ble
+    ---@param delegate id
+    ---@param cb function
     init = a.wrap(function(self, delegate, cb)
         self.init_cb:set(didUpdateState(cb))
         objc.CBCentralManager:alloc():initWithDelegate_queue(delegate, nil)
     end),
 
+    ---Scan for peripherals
+    ---@param self Ble
+    ---@param central id
+    ---@param cb function
     scan = a.wrap(function(self, central, cb)
         self.scan_cb:set(didDiscoverPeripheral(cb))
         central:scanForPeripheralsWithServices_options(nil, nil)
     end),
 
+    ---Connect to peripheral
+    ---@param self Ble
+    ---@param central id
+    ---@param peripheral id
+    ---@param cb function
     connect = a.wrap(function(self, central, peripheral, cb)
         self.connect_cb:set(didConnectPeripheral(cb))
         self.connect_fail_cb:set(didFailToConnectPeripheral(cb))
         central:connectPeripheral_options(peripheral, nil)
     end),
 
+    ---Discover a service for peripheral
+    ---@param self Ble
+    ---@param peripheral id
+    ---@param uuid id
+    ---@param cb function
     discoverService = a.wrap(function(self, peripheral, uuid, cb)
         self.discover_svc_cb:set(didDiscoverServices(cb))
         peripheral:discoverServices(objc.NSArray:arrayWithObject(uuid))
     end),
 
+    ---Discover a characteristic for peripheral
+    ---@param self Ble
+    ---@param peripheral id
+    ---@param service id
+    ---@param uuid id
+    ---@param cb function
     discoverCharacteristic = a.wrap(function(self, peripheral, service, uuid, cb)
         self.discover_char_cb:set(didDiscoverCharacteristics(cb))
         peripheral:discoverCharacteristics_forService(objc.NSArray:arrayWithObject(uuid), service)
     end),
 
+    ---Write to a characteristic for peripheral
+    ---@param self Ble
+    ---@param peripheral id
+    ---@param characteristic id
+    ---@param value id
+    ---@param cb function
     write = a.wrap(function(self, peripheral, characteristic, value, cb)
         self.write_cb:set(didWriteValueForCharacteristic(cb))
         peripheral:writeValue_forCharacteristic_type(value, characteristic, CBCharacteristicWriteWithResponse)
     end),
 
+    ---Disconnect peripheral
+    ---@param self Ble
+    ---@param central id
+    ---@param peripheral id
+    ---@param cb function
     disconnect = a.wrap(function(self, central, peripheral, cb)
         self.disconnect_cb:set(didDisconnectPeripheral(cb))
         central:cancelPeripheralConnection(peripheral)
     end),
 
+    ---Sleep for a duration
+    ---@param self Ble
+    ---@param target id
+    ---@param seconds number
+    ---@param cb function
     sleep = a.wrap(function(self, target, seconds, cb)
         self.timer_cb:set(timerFired(cb))
         seconds = ffi.new("double", seconds)

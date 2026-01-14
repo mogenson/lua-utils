@@ -53,7 +53,7 @@ local http_status = {
     [505] = "505 HTTP Version Not Supported",
 }
 
----@class Response
+---@class Response: pl.Class
 ---@field content string|Element
 ---@field content_type string
 ---@field status_code number

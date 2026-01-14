@@ -1,3 +1,5 @@
+---@diagnostic disable:redefined-local
+
 local a = require("async")
 local curl = require("libcurl")
 local loop = require("libuv")
@@ -18,19 +20,21 @@ describe("libcurl", function()
         end)
 
         local main = a.sync(function()
-            return a.wait(a.gather({ get1(url), get1(url) }))
+            return a.wait(a.gather({ get1(url), get2(url) }))
         end)
 
-        local response1, response2 = "", ""
-        a.run(main(), function(...) response1, response2 = ... end)
+        local response1, response2 ---@type string?, string?
+        a.run(main(), function(...)
+            response1, response2 = ... ---@type string?, string?
+        end)
         loop:run()
 
         local expected = string.format('"url": "%s"\n}\n', url)
         assert.are.same("string", type(response1))
-        assert.are.same(expected, response1:sub(- #expected))
+        assert.are.same(expected, assert(response1):sub(- #expected))
 
         assert.are.same("string", type(response2))
-        assert.are.same(expected, response2:sub(- #expected))
+        assert.are.same(expected, assert(response2):sub(- #expected))
     end)
 
     it("post", function()
@@ -44,11 +48,13 @@ describe("libcurl", function()
             return a.wait(post(url, content))
         end)
 
-        local response
-        a.run(main(), function(...) response = ... end)
+        local response ---@type string?
+        a.run(main(), function(...)
+            response = ... ---@type string?
+        end)
         loop:run()
 
         assert.are.same("string", type(response))
-        assert.is_not_nil(response:find(content))
+        assert.is_not_nil(assert(response):find(content))
     end)
 end)

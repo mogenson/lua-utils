@@ -4,6 +4,7 @@ local curl = require("libcurl")
 local loop = require("libuv")
 local Parser = require("alf.parser")
 local Response = require("alf.response")
+local Request = require("alf.request")
 local Route = require("alf.route")
 local Router = require("alf.router")
 local Server = require("alf.server")
@@ -35,7 +36,7 @@ describe("Router", function()
     end)
 
     it("should extract int path parameter", function()
-        local user_id
+        local user_id ---@type number?
         local function user_details(_, id)
             user_id = id
             return Response()
@@ -47,12 +48,12 @@ describe("Router", function()
         assert.is_true(match)
         assert.are.equal(route, found_route)
 
-        found_route:run({ path = "/users/123" })
+        assert(found_route):run(Request({ path = "/users/123" }))
         assert.are.equal(123, user_id)
     end)
 
     it("should extract number path parameter", function()
-        local number
+        local number ---@type number?
         local function controller(_, param)
             number = param
             return Response()
@@ -64,12 +65,12 @@ describe("Router", function()
         assert.is_true(match)
         assert.are.equal(route, found_route)
 
-        found_route:run({ path = "/test/-3.14" })
+        assert(found_route):run(Request({ path = "/test/-3.14" }))
         assert.are.equal(-3.14, number)
     end)
 
     it("should extract string path parameter", function()
-        local name
+        local name ---@type string?
         local function controller(_, str)
             name = str
             return Response()
@@ -81,7 +82,7 @@ describe("Router", function()
         assert.is_true(match)
         assert.are.equal(route, found_route)
 
-        found_route:run({ path = "/test/John" })
+        assert(found_route):run(Request({ path = "/test/John" }))
         assert.are.equal("John", name)
     end)
 end)
@@ -147,6 +148,7 @@ describe("Parser", function()
         end)
 
         local parser = Parser()
+        ---@type Scope, string?
         local scope, err = a.block(parser:parse(read))
 
         assert.is_nil(err)

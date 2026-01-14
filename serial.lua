@@ -1,21 +1,21 @@
 #!/usr/bin/env lua
 
-local uv = require("luv")
+local uv = require("luv") ---@type table
 
 local port = arg[1] or "/dev/ttyUSB0"
 local baud = arg[2] or 115200
 
-local read_fd = assert(uv.fs_open(port, "r", tonumber("666", 8)))
-local write_fd = assert(uv.fs_open(port, "w", tonumber("666", 8)))
+local read_fd = assert(uv.fs_open(port, "r", tonumber("666", 8))) ---@type number
+local write_fd = assert(uv.fs_open(port, "w", tonumber("666", 8))) ---@type number
 os.execute("stty -F " .. port .. " " .. baud .. " raw -echo -echoe -echok")
 
-local stdin = assert(uv.new_tty(0, true))
+local stdin = assert(uv.new_tty(0, true)) ---@type table
 assert(stdin:set_mode(1))
-local stdout = assert(uv.new_tty(1, false))
+local stdout = assert(uv.new_tty(1, false)) ---@type table
 
-local serial_in = uv.new_pipe()
+local serial_in = uv.new_pipe() ---@type table
 assert(serial_in:open(read_fd))
-local serial_out = uv.new_pipe()
+local serial_out = uv.new_pipe() ---@type table
 serial_out:open(write_fd)
 
 local function quit()

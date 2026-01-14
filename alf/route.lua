@@ -22,43 +22,44 @@ local function make_path_matcher(path)
     assert(stringx.startswith(path, "/"), "A route path must start with a slash `/`.")
 
     -- Capture which converters are used. There will be one converter for each parameter.
-    local converters = {}
+    local converters = {} ---@type string[]
 
     local pattern = "^"
-    local index, path_length = 1, string.len(path)
-    local parameter_start, parameter_end
+    local index, path_length = 1, path:len()
     while index <= path_length do
-        parameter_start, parameter_end = string.find(path, PARAMETER_PATTERN, index)
+        local parameter_start, parameter_end = path:find(PARAMETER_PATTERN, index)
         if parameter_start then
             -- Include any literal characters before the parameter.
-            pattern = pattern .. string.sub(path, index, parameter_start - 1)
+            pattern = pattern .. path:sub(index, parameter_start - 1)
 
-            local _, converter = string.match(path, PARAMETER_PATTERN, parameter_start)
-            local converter_type = string.sub(converter, 2) -- strip off the colon
+            ---@type number?, string?
+            local _, converter = path:match(PARAMETER_PATTERN, parameter_start)
+            local converter_type = assert(converter):sub(2) -- strip off the colon
 
             local converter_pattern = CONVERTER_PATTERNS[converter_type]
             if not converter_pattern then
                 error("Unknown converter type: " .. converter_type)
             end
 
-            pattern = pattern .. converter_pattern
+            pattern = pattern .. converter_pattern ---@type string
             table.insert(converters, converter_type)
             index = parameter_end + 1
         else
             -- No parameters. Capture any remaining portion.
-            pattern = pattern .. string.sub(path, index)
+            pattern = pattern .. path:sub(index)
             break
         end
     end
     return pattern .. "$", converters
 end
 
----@class Route
+---@class Route: pl.Class
 ---@field path string An HTTP request path
 ---@field path_pattern string
 ---@field controller function
 ---@field methods string[] list of supported HTTP methods
 ---@field converters string[]
+---@operator call(...): Route
 local Route = class()
 
 ---A route to an individual controller
@@ -78,7 +79,7 @@ end
 ---@param path string An HTTP request path
 ---@return boolean|nil true if path and method match, false if only path matches, nil for no match
 function Route:matches(method, path)
-    if not string.match(path, self.path_pattern) then return nil end -- no match
+    if not path:match(self.path_pattern) then return nil end -- no match
 
     for _, allowed_method in ipairs(self.methods) do
         if method == allowed_method then return true end -- good match
@@ -91,17 +92,12 @@ end
 ---@param request Request
 ---@return Response
 function Route:run(request)
-    local raw_parameters = table.pack(string.match(request.path, self.path_pattern))
+    local raw_parameters = table.pack(string.match(request.path, self.path_pattern)) ---@type string[]
 
-    local transformer
-    local parameters = {}
+    local parameters = {} ---@type any[]
     for i, converter_type in ipairs(self.converters) do
-        transformer = CONVERTER_TRANSFORMS[converter_type]
-        if transformer then
-            table.insert(parameters, transformer(raw_parameters[i]))
-        else
-            table.insert(parameters, raw_parameters[i])
-        end
+        local transformer = CONVERTER_TRANSFORMS[converter_type] ---@type function?
+        table.insert(parameters, transformer and transformer(raw_parameters[i]) or raw_parameters[i])
     end
 
     return self.controller(request, table.unpack(parameters))

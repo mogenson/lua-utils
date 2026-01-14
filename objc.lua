@@ -5,11 +5,15 @@ local C = ffi.C
 table.pack = table.pack or function(...) return { n = select("#", ...), ... } end
 table.unpack = table.unpack or unpack
 
----@alias cdata  userdata C types returned from FFI
----@alias id     cdata    Objective-C object
----@alias Class  cdata    Objective-C Class
----@alias SEL    cdata    Objective-C Selector
----@alias Method cdata    Objective-C Method
+---@class IMP: ffi.cb*
+---@class Method: ffi.cdata*
+---@class SEL: ffi.cdata*
+
+---@class Class: ffi.cdata*
+---@field [string] any
+
+---@class id: ffi.cdata*
+---@field [string] any
 
 ffi.cdef([[
 // types
@@ -75,7 +79,7 @@ local type_encoding = setmetatable({
 }, {
     __index = function(_, k)
         assert(type(k) == "string" and #k > 2)
-        local first_letter = k:sub(1, 1)
+        local first_letter = k:sub(1, 1) ---@type string
         if first_letter == "{" or first_letter == "(" then -- named struct or union
             return assert(select(3, k:find("%" .. first_letter .. "(%a+)=")))
         end
@@ -88,22 +92,23 @@ local cast = setmetatable({}, {
     ---@param self table
     ---@param typedef string C type definition
     ---@param object any object to cast
-    ---@return cdata c
+    ---@return ffi.cdata*
     __call = function(self, typedef, object)
-        local typeobj = self[typedef]
+        local typeobj = self[typedef] ---@type ffi.ctype*
         if not typeobj then
             typeobj = ffi.typeof(typedef)
-            self[typedef] = typeobj
+            self[typedef] = typeobj ---@type ffi.ctype*
         end
         return ffi.cast(typeobj, object)
     end
 })
 
 ---convert a NULL pointer to nil
----@param p cdata pointer
----@return cdata | nil
+---@generic T
+---@param p T
+---@return T?
 local function ptr(p)
-    if p == nil then return nil else return p end
+    return p ~= nil and p or nil
 end
 
 ---return a Class from name or object
@@ -114,8 +119,8 @@ local function cls(name)
     if ffi.istype("id", name) then
         return assert(ptr(C.object_getClass(name))) -- get class from object
     end
-    if type(name) == "cdata" and ffi.istype("Class", name) then
-        return name -- already a Class
+    if type(name) == "cdata" and ffi.istype("Class", name) then ---@cast name Class
+        return name -- already a class
     end
     assert(type(name) == "string")
     return assert(ptr(C.objc_lookUpClass(name)))
@@ -127,7 +132,7 @@ end
 ---@return SEL
 local function sel(name, num_args)
     assert(name)
-    if type(name) == "cdata" and ffi.istype("SEL", name) then
+    if type(name) == "cdata" and ffi.istype("SEL", name) then ---@cast name SEL
         return name -- already a SEL
     end
     assert(type(name) == "string")
@@ -161,7 +166,7 @@ local function msgSend(self, selector, ...)
     ---convert a Lua variable to a C type if needed
     ---@param lua_var any
     ---@param c_type string
-    ---@return cdata | any
+    ---@return ffi.cdata*
     local function convert(lua_var, c_type)
         if type(lua_var) == "string" then
             if c_type == "SEL" then
@@ -181,7 +186,7 @@ local function msgSend(self, selector, ...)
     local selector = sel(selector) ---@diagnostic disable-line: redefined-local
     local method = getMethod(self, selector)
     local call_args = table.pack(self, selector, ...)
-    local char_ptr = assert(ptr(C.method_copyReturnType(method)))
+    local char_ptr = assert(ptr(C.method_copyReturnType(method))) ---@type ffi.cdata*
     local objc_type = ffi.string(char_ptr)
     C.free(char_ptr)
     local c_type = assert(type_encoding[objc_type])
@@ -189,19 +194,19 @@ local function msgSend(self, selector, ...)
     table.insert(signature, c_type)
     table.insert(signature, "(*)(")
 
-    local num_method_args = C.method_getNumberOfArguments(method)
+    local num_method_args = C.method_getNumberOfArguments(method) ---@type number
     assert(num_method_args == call_args.n)
     for i = 1, num_method_args do
-        char_ptr = assert(ptr(C.method_copyArgumentType(method, i - 1)))
+        char_ptr = assert(ptr(C.method_copyArgumentType(method, i - 1))) ---@type ffi.cdata*
         objc_type = ffi.string(char_ptr)
         C.free(char_ptr)
         c_type = assert(type_encoding[objc_type])
         table.insert(signature, c_type)
-        call_args[i] = convert(call_args[i], c_type)
+        call_args[i] = convert(call_args[i], c_type) ---@type ffi.cdata*
         if i < num_method_args then table.insert(signature, ",") end
     end
     table.insert(signature, ")")
-    local fn = cast(table.concat(signature), C.objc_msgSend)
+    local fn = cast(table.concat(signature), C.objc_msgSend) ---@type ffi.cb*
     return ptr(fn(table.unpack(call_args, 1, call_args.n)))
 end
 
@@ -219,7 +224,7 @@ end
 local function newClass(name, super_class)
     assert(name and type(name) == "string")
     local super_class = cls(super_class or "NSObject") ---@diagnostic disable-line: redefined-local
-    local class = assert(ptr(C.objc_allocateClassPair(super_class, name, 0)))
+    local class = assert(ptr(C.objc_allocateClassPair(super_class, name, 0))) ---@type Class
     C.objc_registerClassPair(class)
     return class
 end
@@ -229,7 +234,7 @@ end
 ---@param selector string | SEL name of method
 ---@param types string Objective-C type encoded method arguments and return type
 ---@param func function lua callback function for method implementation
----@return cdata ffi callback
+---@return IMP
 local function addMethod(class, selector, types, func)
     assert(type(func) == "function")
     assert(type(types) == "string") -- and #types - 1 == debug.getinfo(func).nparams)
@@ -247,7 +252,7 @@ local function addMethod(class, selector, types, func)
     table.insert(signature, ")")
     local signature = table.concat(signature) ---@diagnostic disable-line: redefined-local
 
-    local imp = cast("IMP", cast(signature, func))
+    local imp = cast("IMP", cast(signature, func)) ---@type IMP
     assert(C.class_addMethod(class, selector, imp, types) == 1)
     return imp
 end
@@ -263,9 +268,10 @@ local objc = setmetatable({
     ptr = ptr,
     cast = cast,
 }, {
-    __index = function(_, name)
-        return cls(name) -- use key to lookup class by name
-    end
+    ---Lookup class by name
+    ---@param name string
+    ---@return Class
+    __index = function(_, name) return cls(name) end
 })
 
 ffi.metatype("struct objc_selector", {
@@ -278,6 +284,10 @@ ffi.metatype("struct objc_class", {
     __tostring = function(class)
         return ffi.string(assert(ptr(C.class_getName(class))))
     end,
+    ---Call a class method
+    ---@param class Class
+    ---@param selector string
+    ---@return fun(self: Class, ...?): any
     __index = function(class, selector)
         return function(self, ...)
             assert(class == self)
@@ -290,6 +300,10 @@ ffi.metatype("struct objc_object", {
     __tostring = function(class)
         return ffi.string(assert(ptr(C.object_getClassName(class))))
     end,
+    ---Get an instance property or call an instance method
+    ---@param object id
+    ---@param selector string
+    ---@return any | fun(self: id, ...?): any
     __index = function(object, selector)
         if ptr(C.class_getProperty(cls(object), selector)) then
             return msgSend(object, sel(selector))
@@ -300,6 +314,10 @@ ffi.metatype("struct objc_object", {
             return msgSend(self, sel(selector, select("#", ...)), ...)
         end
     end,
+    ---Set an instance property
+    ---@param object id
+    ---@param selector string
+    ---@param value any
     __newindex = function(object, selector, value)
         selector = string.format('set%s%s:', selector:sub(1, 1):upper(), selector:sub(2))
         msgSend(object, sel(selector), value) -- propertyName to setPropertyName

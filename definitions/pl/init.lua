@@ -1,0 +1,40 @@
+---@meta
+
+---@class pl
+---@field app pl.app
+---@field array2d pl.array2d
+---@field class pl.ClassModule
+---@field compat pl.compat
+---@field comprehension pl.Comprehension
+---@field config pl.config
+---@field data pl.data
+---@field dir pl.dir
+---@field file pl.file
+---@field func pl.func
+---@field input pl.input
+---@field lapp pl.lapp
+---@field lexer pl.lexer
+---@field luabalanced pl.luabalanced
+---@field operator pl.operator
+---@field path pl.path
+---@field permute pl.permute
+---@field pretty pl.pretty
+---@field seq pl.seq
+---@field sip pl.sip
+---@field strict pl.strict
+---@field stringio pl.stringio
+---@field stringx pl.stringx
+---@field tablex pl.tablex
+---@field template pl.template
+---@field test pl.test
+---@field text pl.text
+---@field types pl.types
+---@field url pl.url
+---@field utils pl.utils
+---@field xml pl.xml
+---@field Date pl.Date
+---@field List pl.List
+---@field Map pl.Map
+---@field MultiMap pl.MultiMap
+---@field OrderedMap pl.OrderedMap
+---@field Set pl.Set

@@ -15,8 +15,8 @@ local function load_app(app)
         return app
     elseif app_type == "string" then
         local app_module, app_name = utils.splitv(app, ":", false, 2)
-        local module = require(app_module)
-        app = module[app_name]
+        local module = require(app_module) ---@type table
+        app = module[app_name] ---@type Application?
         if not app then
             error(("No app named '%s' found in module '%s'"):format(app_name, app_module))
         end
@@ -34,7 +34,7 @@ local on_connection = a.sync(function(client, app)
     local receiver = a.sync(function() return a.wait(q:get()) end)
 
     local parser = Parser()
-    local scope, err = a.wait(parser:parse(receiver))
+    local scope, err = a.wait(parser:parse(receiver)) ---@type Scope, number?
 
     if err then
         if err == Parser.INVALID_REQUEST_LINE then
@@ -51,13 +51,14 @@ local on_connection = a.sync(function(client, app)
     client:close()
 end)
 
----@class Server
+---@class Server: pl.Class
 ---@field app Application
 ---@field tcp Tcp
+---@operator call(...): Server
 local Server = class()
 
 ---Create an HTTP web server
----@param app string|Application
+---@param app Application|string
 function Server:_init(app)
     self.app = load_app(app)
     self.tcp = nil

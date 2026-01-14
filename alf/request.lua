@@ -1,6 +1,6 @@
 local class = require("pl.class")
 
----@class Request
+---@class Request: pl.Class
 ---@field path string
 ---@field scope Scope
 local Request = class()

@@ -7,10 +7,10 @@ local class = require("pl.class")
 ---@alias Content ContentProvider|ContentProvider[]
 
 ---An HTML element
----@class Element
+---@class Element: pl.Class
+---@field super fun(self: Element, ...?)
+---@field class_of fun(self: Element, instance: any): boolean
 ---@field tag Tag
----@field class_of fun(self, obj:any):boolean
----@field super fun(self, Tag, ...)
 local Element = class()
 
 ---Element constructor
@@ -46,6 +46,8 @@ local function render_content(content)
     return ""
 end
 
+---Render output string for attributes
+---@param attributes Attributes
 local function render_attributes(attributes)
     local html = {}
     for key, value in pairs(attributes) do
@@ -65,7 +67,7 @@ Element.Void = class(Element)
 
 ---Init void element
 ---@param tag Tag
----@param attributes Attributes|nil
+---@param attributes Attributes?
 function Element.Void:_init(tag, attributes)
     self:super(tag)
     self.attributes = attributes or {}
@@ -114,8 +116,8 @@ Element.Container = class(Element.Void)
 
 ---Init container element
 ---@param tag Tag
----@param attributes Attributes|nil
----@param content Content|nil
+---@param attributes Attributes?
+---@param content Content?
 ---@diagnostic disable-next-line duplicate-set-field
 function Element.Container:_init(tag, attributes, content)
     self:super(tag, attributes)

@@ -5,8 +5,9 @@ local Request = require("alf.request")
 local Response = require("alf.response")
 local Router = require("alf.router")
 
----@class Application
+---@class Application: pl.Class
 ---@field router Router
+---@operator call(...): Application
 local Application = class()
 
 ---An ASGI application

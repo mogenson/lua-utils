@@ -50,9 +50,8 @@ describe("fs", function()
         loop:run()
 
         assert.is_number(mode)
-        mode = assert(mode)
-        assert(loop.S_ISREG(mode))
-        assert(not loop.S_ISDIR(mode))
+        assert(loop.S_ISREG(assert(mode)))
+        assert(not loop.S_ISDIR(assert(mode)))
     end)
 
     it("scandir", function()
@@ -60,7 +59,7 @@ describe("fs", function()
             loop:fs_scandir(path, cb)
         end)
 
-        local entries = nil
+        local entries = nil ---@type Entry[]?
         a.run(scandir("."), function(val) entries = val end)
         loop:run()
 
@@ -174,7 +173,7 @@ describe("pipe", function()
         end)
 
         local result = nil
-        main()(function(...) result = ... end)
+        main()(function(x) result = x end)
         loop:run()
 
         assert.are.equal(count, (result or {})[2])
@@ -248,7 +247,7 @@ describe("socket", function()
         end)
 
         local result = nil
-        a.run(main(), function(...) result = ... end)
+        a.run(main(), function(x) result = x end)
         loop:run()
 
         assert.are.equal(count, (result or {})[2])

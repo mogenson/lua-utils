@@ -14,17 +14,20 @@ if not arg[1] or arg[1]:match("^-+h") then
     os.exit()
 end
 
-local main_file = arg[1]
-local main_content = assert(io.open(main_file, "r")):read("*a")
+local main_file = arg[1] ---@type string
+local main_content = assert(io.open(main_file, "r")):read("*a") ---@type string
 local output_name = main_file:gsub("%.[^.]*$", "") .. (jit and ".ljbc" or ".luac")
 local output_file = assert(io.open(output_name, "w"))
 
-local preload_modules = {}
-local skipped_modules = {}
-local bundled_sources = {}
+local preload_modules = {} ---@type table<string,string>
+local skipped_modules = {} ---@type table<string,boolean>
+local bundled_sources = {} ---@type string[]
 
+---@param content string
 local function process_modules(content)
+    ---@diagnostic disable-next-line: no-unknown
     for _, module_name in content:gmatch(require_pattern) do
+        ---@cast module_name string
         local module_file = package.searchpath(module_name, package.path)
         if module_file then
             if not preload_modules[module_name] then

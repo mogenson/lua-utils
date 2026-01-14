@@ -1,3 +1,5 @@
+---@diagnostic disable:redefined-local
+
 local a = require("async")
 
 describe("a", function()
@@ -16,7 +18,7 @@ describe("a", function()
             return g .. s .. name
         end)
 
-        local result = a.block(main("World"))
+        local result = a.block(main("World")) ---@type string?
         assert.are.equal("Hello, World", result)
     end)
 
@@ -44,7 +46,7 @@ describe("a", function()
             return a.wait(a.gather({ getter(q), putter(q) }))
         end)
 
-        local getter_vals, putter_vals = a.block(main())
+        local getter_vals, putter_vals = a.block(main()) ---@type number[]?, boolean?
         assert.are.same({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }, getter_vals)
         assert.is_true(putter_vals)
     end)
@@ -62,6 +64,7 @@ describe("a", function()
 
         local getter = a.sync(function(queue)
             local vals = {}
+            ---@diagnostic disable-next-line:no-unknown
             for val in queue:iter() do
                 table.insert(vals, val)
             end
@@ -72,7 +75,7 @@ describe("a", function()
             return a.wait(a.gather({ getter(q), putter(q) }))
         end)
 
-        local getter_vals, putter_vals = a.block(main())
+        local getter_vals, putter_vals = a.block(main()) ---@type number[]?, boolean?
         assert.are.same({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }, getter_vals)
         assert.is_true(putter_vals)
     end)
@@ -103,7 +106,7 @@ describe("a", function()
             return a.wait(a.gather({ sender(tx), receiver(rx) }))
         end)
 
-        local tx_vals, rx_vals = a.block(main())
+        local tx_vals, rx_vals = a.block(main()) ---@type boolean?, number[]?
         assert.is_true(tx_vals)
         assert.are.same({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }, rx_vals)
     end)
@@ -132,7 +135,7 @@ describe("a", function()
             return a.wait(a.gather({ receiver(rx), sender(tx) }))
         end)
 
-        local rx_vals, tx_vals = a.block(main())
+        local rx_vals, tx_vals = a.block(main()) ---@type number[]?, boolean?
         assert.are.same({ 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }, rx_vals)
         assert.is_true(tx_vals)
     end)
@@ -142,7 +145,7 @@ describe("a", function()
             return 42
         end)
 
-        local result = a.block(f())
+        local result = a.block(f()) ---@type number?
         assert.are.equal(42, result)
     end)
 
@@ -151,7 +154,8 @@ describe("a", function()
             return n + 1
         end)
 
-        local result = a.block(f(41))
+        local result = a.block(f(41)) ---@type number?
+
         assert.are.equal(42, result)
     end)
 
@@ -182,7 +186,7 @@ describe("a", function()
             cb(n + 1)
         end)
 
-        local result = a.block(f(41))
+        local result = a.block(f(41)) ---@type number?
         assert.are.equal(42, result)
     end)
 
@@ -207,7 +211,7 @@ describe("a", function()
             return from_foo + 1
         end)
 
-        local result = a.block(bar(41))
+        local result = a.block(bar(41)) ---@type number?
         assert.are.equal(43, result)
     end)
 
@@ -292,9 +296,9 @@ describe("a", function()
     end)
 
     it("races two futures", function()
-        local continueFoo = nil
+        local continueFoo = nil ---@diagnostic disable-line:unused-local
         local foo = a.wrap(function(cb)
-            continueFoo = cb
+            continueFoo = cb ---@diagnostic disable-line:unused-local
         end)
 
         local continueBar = nil
@@ -308,7 +312,7 @@ describe("a", function()
 
         local calledWith = nil
         baz()(function(...)
-            calledWith = ...
+            calledWith = ... ---@type number?
         end)
 
         assert.are.same(nil, calledWith)

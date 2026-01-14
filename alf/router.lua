@@ -1,7 +1,8 @@
 local class = require("pl.class")
 
----@class Router
+---@class Router: pl.Class
 ---@field routes Route[]
+---@operator call(...): Router
 local Router = class()
 
 ---A collection of ordered routes

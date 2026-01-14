@@ -11,25 +11,25 @@ local Response = require("alf.response")
 local Route = require("alf.route")
 local Server = require("alf.server")
 
-local Body = require("alf.elements.Body")
-local Br = require("alf.elements.Br")
-local Div = require("alf.elements.Div")
-local Footer = require("alf.elements.Footer")
-local H1 = require("alf.elements.H1")
-local Head = require("alf.elements.Head")
-local Header = require("alf.elements.Header")
-local Hr = require("alf.elements.Hr")
-local Html = require("alf.elements.Html")
-local Input = require("alf.elements.Input")
-local Ins = require("alf.elements.Ins")
-local Link = require("alf.elements.Link")
-local Main = require("alf.elements.Main")
-local Mark = require("alf.elements.Mark")
-local Meta = require("alf.elements.Meta")
-local P = require("alf.elements.P")
-local Pre = require("alf.elements.Pre")
-local Script = require("alf.elements.Script")
-local Title = require("alf.elements.Title")
+local Body = require("alf.elements.body")
+local Br = require("alf.elements.br")
+local Div = require("alf.elements.div")
+local Footer = require("alf.elements.footer")
+local H1 = require("alf.elements.h1")
+local Head = require("alf.elements.head")
+local Header = require("alf.elements.header")
+local Hr = require("alf.elements.hr")
+local Html = require("alf.elements.html")
+local Input = require("alf.elements.input")
+local Ins = require("alf.elements.ins")
+local Link = require("alf.elements.link")
+local Main = require("alf.elements.main")
+local Mark = require("alf.elements.mark")
+local Meta = require("alf.elements.meta")
+local P = require("alf.elements.p")
+local Pre = require("alf.elements.pre")
+local Script = require("alf.elements.script")
+local Title = require("alf.elements.title")
 
 ---Sleep current async task until time has elapsed
 ---@param ms number duration in milliseconds
@@ -145,6 +145,7 @@ Kendall Square
     Red line: %s min
 ]]):format(table.unpack(seq(times)
             :map(json.decode)
+            ---@diagnostic disable-next-line: no-unknown
             :map(function(data) return data.data[1].attributes.arrival_time or "" end)
             :map(to_seconds)
             :map(operator.sub, now)
@@ -160,7 +161,7 @@ end
 ---@param request Request
 ---@return Response
 local function shutdown(request) ---@diagnostic disable-line:unused-local
-    local response = Response()
+    local response = Response() ---@type Response
     local send = response.send
     response.send = function(self, sender)
         send(self, sender)

@@ -13,16 +13,19 @@ local CURLOPT_WRITEFUNCTION = 20011
 
 local curl = {}
 
+---@param url string
+---@return string
+---@return number
 function curl.http_get(url)
     local response = {}
-    local session = assert(libcurl.curl_easy_init())
+    local session = assert(libcurl.curl_easy_init()) ---@type ffi.cdata*
     libcurl.curl_easy_setopt(session, CURLOPT_URL, url)
     libcurl.curl_easy_setopt(session, CURLOPT_WRITEFUNCTION,
-        ffi.cast("write_function", function(buffer, size, nitems, context)
+        ffi.cast("write_function", function(buffer, size, nitems, _)
             table.insert(response, ffi.string(buffer, size * nitems))
             return nitems
         end))
-    local ret = libcurl.curl_easy_perform(session)
+    local ret = libcurl.curl_easy_perform(session) ---@type number
     libcurl.curl_easy_cleanup(session)
     return table.concat(response), ret
 end
