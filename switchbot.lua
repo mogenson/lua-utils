@@ -1,41 +1,21 @@
 ---@diagnostic disable unused-local
-
 local a = require("async")
 local objc = require("objc")
 objc.loadFramework("Foundation")
 objc.loadFramework("CoreBluetooth")
 
 local ffi = require("ffi")
-local C = ffi.C
-
-ffi.cdef([[
-void NSLog(id, ...);
-]])
+ffi.cdef("void NSLog(id, ...);")
 
 -- utilities
-local function NSString(str)
-    return objc.NSString:stringWithUTF8String(str)
-end
-
-local function NSInteger(int)
-    return ffi.new("NSInteger", int)
-end
-
-local function BOOL(bool)
-    return ffi.new("BOOL", bool and 1 or 0)
-end
-
-local function CBUUID(str)
-    return objc.CBUUID:UUIDWithString(NSString(str))
-end
-
+local function NSString(str) return objc.NSString:stringWithUTF8String(str) end
+local function NSInteger(int) return ffi.new("NSInteger", int) end
+local function BOOL(bool) return ffi.new("BOOL", bool and 1 or 0) end
+local function CBUUID(str) return objc.CBUUID:UUIDWithString(NSString(str)) end
+local function NSLog(str, ...) ffi.C.NSLog(NSString(str), ...) end
 local function NSData(bytes)
-    return objc.NSData:dataWithBytes_length(objc.cast("const void*", ffi.new("uint8_t[?]", #bytes, bytes)),
-        NSInteger(#bytes))
-end
-
-local function NSLog(str, ...)
-    C.NSLog(NSString(str), ...)
+    return objc.NSData:dataWithBytes_length(
+        objc.cast("const void*", ffi.new("uint8_t[?]", #bytes, bytes)), NSInteger(#bytes))
 end
 
 -- constants
@@ -61,12 +41,10 @@ local CBAdvertisementDataSolicitedServiceUUIDsKey = NSString("kCBAdvDataSolicite
 local CBCharacteristicWriteWithResponse = NSInteger(0)
 local CBCharacteristicWriteWithoutResponse = NSInteger(1)
 
-local ServiceDataUuid = CBUUID("fd3d")
 local CommandService = CBUUID("cba20d00-224d-11e6-9fb8-0002a5d5c51b")
 local CommandCharacteristic = CBUUID("cba20002-224d-11e6-9fb8-0002a5d5c51b")
 local ResponseCharacteristic = CBUUID("cba20003-224d-11e6-9fb8-0002a5d5c51b")
-local ExpectedServiceData = NSData({ 0x48, 0x00, 0x64, 0x00 })
-local ExpectedMfgData = NSData({ 0x69, 0x09, 0xd6, 0x34, 0xc5, 0x46, 0x61, 0x50, 0x05, 0x0c })
+local ManufacturerData = NSData({ 0x69, 0x09, 0xd6, 0x34, 0xc5, 0x46, 0x61, 0x50, 0x05, 0x0c })
 local PressCommand = NSData({ 0x57, 0x01, 0x00 })
 local PressResponse = NSData({ 0x01, 0xFF, 0x00 })
 
@@ -79,22 +57,21 @@ local function didUpdateState(cb)
         if (central.state == CBCentralManagerStatePoweredOn) then
             NSLog("Central manager powered on")
             return cb and cb(central:retain())
+        else
+            NSLog("Central manager state: %d", central.state)
+            return cb and cb(nil)
         end
     end
 end
 
 local function didDiscoverPeripheral(cb)
-    return function(id, sel, central, peripheral,
-                    advertisement_data, rssi)
-        local service_data = advertisement_data:objectForKey(CBAdvertisementDataServiceDataKey)  -- NSDictionary<NSString *,id>
+    return function(id, sel, central, peripheral, advertisement_data, rssi)
+        NSLog("Discovered: %@", peripheral)
         local mfg_data = advertisement_data:objectForKey(CBAdvertisementDataManufacturerDataKey) -- NSData*
-        if service_data and mfg_data then
-            local data = service_data:objectForKey(ServiceDataUuid)                              -- NSDictionary<CBUUID *, NSData *>
-            if data and data:isEqualToData(ExpectedServiceData) == BOOL(true) and mfg_data:isEqualToData(ExpectedMfgData) == BOOL(true) then
-                NSLog("Discovered peripheral with service data: %@ and manufacturer data %@", data, mfg_data)
-                central:stopScan()
-                return cb and cb(peripheral:retain())
-            end
+        if mfg_data and mfg_data:isEqualToData(ManufacturerData) == BOOL(true) then
+            NSLog("Discovered Switchbot with manufacturer data %@", mfg_data)
+            central:stopScan()
+            return cb and cb(peripheral:retain())
         end
     end
 end
