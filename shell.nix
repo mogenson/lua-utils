@@ -1,6 +1,13 @@
 { pkgs ? import <nixpkgs> { } }:
 
 let
+  pl-definitions = pkgs.fetchFromGitHub {
+    owner = "goldenstein64";
+    repo = "pl-definitions";
+    rev = "bb653648e5f15eb5a69587ecacb8e7b671e0d258";
+    sha256 = "0nwsy2a4vfh3159klr645f0dn7pvbh4xs5dzy8v2ac9zhl3s2vlh";
+  };
+
   json-lua = pkgs.luajit.pkgs.buildLuaPackage {
     pname = "json-lua";
     version = "0.1.2";
@@ -31,6 +38,9 @@ in pkgs.mkShell {
       pkgs.curl
       pkgs.libuv
     ]}:$DYLD_LIBRARY_PATH"
+
+    ln -sf ${pl-definitions}/library/pl definitions/
+
     echo "Using LuaJIT version: $(luajit -v) with lib path: $DYLD_LIBRARY_PATH"
   '';
 }
