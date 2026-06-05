@@ -5,19 +5,7 @@ local Application = require("alf.application")
 local Response = require("alf.response")
 local Route = require("alf.route")
 local Server = require("alf.server")
-
-local A = require("alf.elements.a")
-local Body = require("alf.elements.body")
-local H1 = require("alf.elements.h1")
-local Head = require("alf.elements.head")
-local Header = require("alf.elements.header")
-local Html = require("alf.elements.html")
-local Li = require("alf.elements.li")
-local Link = require("alf.elements.link")
-local Main = require("alf.elements.main")
-local Meta = require("alf.elements.meta")
-local Title = require("alf.elements.title")
-local Ul = require("alf.elements.ul")
+local Html = require("alf.html")
 
 local stat = a.wrap(function(path, cb) return loop:fs_stat(path, cb) end)
 local scandir = a.wrap(function(path, cb) return loop:fs_scandir(path, cb) end)
@@ -39,38 +27,41 @@ local function list_dir(local_path, request_path)
     if request_path ~= "/" then
         local parent_path = request_path:match("(.*)/[^/]+/?$")
         if parent_path == "" then parent_path = "/" end
-        table.insert(items, Li(nil, { A({ href = parent_path }, "..") }))
+        -- table.insert(items, Li(nil, { A({ href = parent_path }, "..") }))
+        table.insert(items, Html.li { Html.a { href = parent_path, ".." } })
     end
 
     for _, entry in ipairs(assert(entries)) do
         local link_path = request_path .. (request_path:sub(-1) == "/" and "" or "/") .. entry.name
         local link_name = entry.name .. (entry.type == loop.UV_DIRENT_DIR and "/" or "")
-        table.insert(items, Li(nil, { A({ href = link_path }, link_name) }))
+        -- table.insert(items, Li(nil, { A({ href = link_path }, link_name) }))
+        table.insert(items, Html.li { Html.a { href = link_path, link_name } })
     end
 
     local title = "Index of " .. request_path
 
-    local html = Html(nil, {
-        Head(nil, {
-            Title(nil, title),
-            Meta({
+    local html = Html.Document {
+        lang = "en",
+
+        Html.head {
+            Html.title { title },
+            Html.meta {
                 name = "viewport",
                 content = "width=device-width, initial-scale=1"
-            }),
-            Link({
+            },
+            Html.link {
                 rel = "stylesheet",
                 href = "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.min.css",
-            }),
-        }),
-        Body(nil, {
-            Header(nil, H1(nil, title)),
-            Main(nil,
-                Ul(nil, items)
-            )
-        })
-    })
+            }
+        },
 
-    return Response(html)
+        Html.body {
+            Html.header { Html.h1 { title } },
+            Html.main { Html.ul { items } }
+        }
+    }
+
+    return Response(html, "text/html")
 end
 
 ---Return contents of file in plain text

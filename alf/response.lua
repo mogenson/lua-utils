@@ -1,8 +1,6 @@
 local a = require("async")
 local class = require("pl.class")
 
-local Element = require("alf.elements.element")
-
 local http_status = {
     -- 1xx - https://httpwg.org/specs/rfc7231.html#status.1xx
     [100] = "100 Continue",
@@ -54,20 +52,20 @@ local http_status = {
 }
 
 ---@class Response: pl.Class
----@field content string|Element
+---@field content string
 ---@field content_type string
 ---@field status_code number
 ---@field headers {[string]: string}[]
 local Response = class()
 
 ---An HTTP response
----@param content string|Element|nil The content to return over the wire (default: "")
+---@param content string|Html|nil The content to return over the wire (default: "")
 ---@param content_type string The type of content data (default: "text/html")
 ---@param status_code number The status code (default: 200)
 ---@param headers table HTTP headers (default: {})
 function Response:_init(content, content_type, status_code, headers)
-    self.content = content or ""
-    self.content_type = content_type
+    self.content = tostring(content or "") -- convert Html to string
+    self.content_type = content_type or "text/plain"
     self.status_code = status_code or 200
     self.headers = headers or {}
 end
@@ -75,16 +73,10 @@ end
 ---Send the response data
 ---@param sender function async ASGI callable
 function Response:send(sender)
-    if Element:class_of(self.content) then
-        ---@diagnostic disable-next-line param-type-mismatch
-        self.content = self.content:render()
-        self.content_type = "text/html"
-    end
-
     local data = {
         "HTTP/1.1 ", assert(http_status[self.status_code]), "\r\n",
         "Content-Length: ", #self.content, "\r\n",
-        "Content-Type: ", self.content_type or "text/plain", "\r\n"
+        "Content-Type: ", self.content_type, "\r\n"
     }
 
     for header, value in pairs(self.headers) do
