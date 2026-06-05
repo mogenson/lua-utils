@@ -1,15 +1,11 @@
 -- from https://riki.house/lua-html
+local class = require("pl.class")
 
 ---@alias HtmlContent string|Html|table
 
 ---@class Html
 ---@field text string
-local Html = {}
-
----@class html
----@overload fun(def: HtmlContent): Html
-local html = {}
-setmetatable(html --[[@as table]], html --[[@as metatable]])
+local Html = class()
 
 local escape_subs = {
     ["&"] = "&amp;",
@@ -38,12 +34,9 @@ end
 
 ---Creates a new Html object representing raw HTML text.
 ---@param text string The raw HTML text.
----@return Html A new Html object.
-function html.Html(text)
-    assert(type(text) == "string", "html.Html expects a string")
-    local obj = { text = text }
-    setmetatable(obj, Html)
-    return obj --[[@as Html]]
+function Html:_init(text)
+    assert(type(text) == "string", "Html expects a string")
+    self.text = text
 end
 
 ---Returns the string representation of the Html object.
@@ -83,9 +76,9 @@ end
 local function write_children(el, def)
     if type(def) == "string" then
         table.insert(el, escape_html(def))
-    elseif type(def) == "table" and getmetatable(def) == Html then
+    elseif Html:class_of(def) then
         ---@cast def Html
-        table.insert(el, def.text)
+        table.insert(el, tostring(def))
     elseif type(def) == "table" then
         ---@cast def any[]
         for _, child in ipairs(def) do
@@ -93,6 +86,11 @@ local function write_children(el, def)
         end
     end
 end
+
+---@class html
+---@overload fun(def: HtmlContent): Html
+local html = {}
+setmetatable(html --[[@as table]], html --[[@as metatable]])
 
 ---Creates an HTML element of a given kind with attributes and children.
 ---@param kind string The HTML tag name (e.g., "div", "span").
@@ -117,7 +115,7 @@ function html.Element(kind, def)
     table.insert(el, ">")
 
     if void_elements[kind] then
-        return html.Html(table.concat(el))
+        return Html(table.concat(el))
     end
 
     -- children
@@ -126,14 +124,14 @@ function html.Element(kind, def)
     -- close tag
     write(el, "</", kind, ">")
 
-    return html.Html(table.concat(el))
+    return Html(table.concat(el))
 end
 
 ---Creates an HTML document with a doctype.
 ---@param def? HtmlContent The content of the html element.
 ---@return Html The resulting Html object.
 function html.Document(def)
-    return html.Html("<!doctype html>" .. tostring(html.Element("html", def)))
+    return Html("<!doctype html>" .. tostring(html.Element("html", def)))
 end
 
 ---Dynamic handler for tag names accessed as properties on the html module.
