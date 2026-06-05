@@ -3,8 +3,10 @@ local class = require("pl.class")
 
 ---@alias HtmlContent string|Html|table
 
----@class Html
----@field text string
+---@class Html: pl.Class
+---@field text? string
+---@field class_of? fun(self: any, obj: any): boolean
+---@operator call(string): Html
 local Html = class()
 
 local escape_subs = {
@@ -89,6 +91,7 @@ end
 
 ---@class html
 ---@overload fun(def: HtmlContent): Html
+---@field [string] fun(def?: HtmlContent): Html
 local html = {}
 setmetatable(html --[[@as table]], html --[[@as metatable]])
 
