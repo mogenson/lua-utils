@@ -1,0 +1,6 @@
+---@diagnostic disable
+return {
+  default = {
+    helper = "spec/busted_helper.lua"
+  }
+}

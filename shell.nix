@@ -38,6 +38,7 @@ in pkgs.mkShell {
       pkgs.curl
       pkgs.libuv
     ]}:$DYLD_LIBRARY_PATH"
+    export LD_LIBRARY_PATH="$DYLD_LIBRARY_PATH"
 
     ln -sf ${pl-definitions}/library/pl definitions/
 
