@@ -301,7 +301,7 @@ ffi.cdef([[
 ---@class Loop: ffi.cdata*
 ---@field UV_RUN_DEFAULT number
 ---@field UV_RUN_ONCE number
----@field UV_RUN_NOWAI number
+---@field UV_RUN_NOWAIT number
 ---@field UV_READABLE number
 ---@field UV_WRITABLE number
 ---@field UV_DISCONNECT number

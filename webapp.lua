@@ -7,29 +7,10 @@ local seq = require("pl.seq")
 local operator = require("pl.operator")
 
 local Application = require("alf.application")
+local Html = require("alf.html")
 local Response = require("alf.response")
 local Route = require("alf.route")
 local Server = require("alf.server")
-
-local Body = require("alf.elements.body")
-local Br = require("alf.elements.br")
-local Div = require("alf.elements.div")
-local Footer = require("alf.elements.footer")
-local H1 = require("alf.elements.h1")
-local Head = require("alf.elements.head")
-local Header = require("alf.elements.header")
-local Hr = require("alf.elements.hr")
-local Html = require("alf.elements.html")
-local Input = require("alf.elements.input")
-local Ins = require("alf.elements.ins")
-local Link = require("alf.elements.link")
-local Main = require("alf.elements.main")
-local Mark = require("alf.elements.mark")
-local Meta = require("alf.elements.meta")
-local P = require("alf.elements.p")
-local Pre = require("alf.elements.pre")
-local Script = require("alf.elements.script")
-local Title = require("alf.elements.title")
 
 ---Sleep current async task until time has elapsed
 ---@param ms number duration in milliseconds
@@ -68,6 +49,7 @@ end
 ---@param request Request
 ---@return Response
 local function home(request) ---@diagnostic disable-line:unused-local
+    --[[
     local html = Html(nil, {
         Head(nil, {
             Title(nil, "NextBus"),
@@ -109,8 +91,53 @@ local function home(request) ---@diagnostic disable-line:unused-local
             }),
         }),
     })
+    ]] --
 
-    return Response(html)
+    local html = Html.Document {
+        lang = "en",
+
+        Html.head {
+            Html.title { "NextBus" },
+            Html.meta {
+                name = "viewport",
+                content = "width=device-width, initial-scale=1"
+            },
+            Html.link {
+                rel = "stylesheet",
+                href = "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.min.css",
+            },
+            Html.script { src = "https://cdn.jsdelivr.net/npm/htmx.org@2/dist/htmx.min.js" },
+        },
+
+        Html.body {
+            Html.header { Html.h1 { "Arrivals" } },
+            Html.main {
+                Html.pre { id = "arrivals", hx_get = "/arrivals", hx_trigger = "load", "Loading arrival times..." },
+                Html.p { id = "last-update", "Waiting for update..." },
+                Html.br(),
+                Html.input {
+                    type = "button",
+                    value = "Refresh",
+                    hx_get = "/arrivals",
+                    hx_target = "#arrivals",
+                    hx_swap = "innerHTML",
+                },
+                Html.input {
+                    type = "button",
+                    value = "Close",
+                    hx_post = "/shutdown",
+                    ["hx-on::after-request"] = "window.close()",
+                },
+            },
+            Html.hr(),
+            Html.footer {
+                Html.p { "LibUV time: ", Html.ins { tostring(loop:now()) } },
+                Html.p { "Using ", Html.mark { tostring(collectgarbage("count")) }, " Kb" },
+            },
+        },
+    }
+
+    return Response(html, "text/html")
 end
 
 ---Return bus arrivals
@@ -130,8 +157,11 @@ local function arrivals(request) ---@diagnostic disable-line:unused-local
     })))
     local date = os.date("*t")
     local now = (date.hour * 3600) + (date.min * 60) + date.sec
-    local updated = Div({ id = "last-update", "hx-swap-oob='true'", },
-        ("Last updated: %2d:%02d:%02d"):format(date.hour, date.min, date.sec))
+    local updated = Html.div {
+        id = "last-update",
+        hx_swap_oob = "true",
+        ("Last updated: %2d:%02d:%02d"):format(date.hour, date.min, date.sec)
+    }
 
     return Response(([[
 Teele Square
@@ -153,7 +183,7 @@ Kendall Square
             :map(math.max, 0)
             :map(math.floor)
             :copy()))
-        .. updated:render()
+        .. tostring(updated)
     )
 end
 
