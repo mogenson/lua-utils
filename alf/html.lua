@@ -100,6 +100,7 @@ setmetatable(html --[[@as table]], html --[[@as metatable]])
 ---@param def? HtmlContent The attributes and children of the element.
 ---@return Html The resulting Html object.
 function html.Element(kind, def)
+    ---@cast def table
     def = type(def) == "string" and { def } or def or {}
 
     local attr = {} ---@type any[][]
