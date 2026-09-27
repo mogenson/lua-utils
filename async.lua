@@ -98,15 +98,6 @@ local function run(future, cb)
     future(cb)
 end
 
----Execute of a future and collect the results. This function will block.
----@param future function a future to run
----@return ... a variadic list of results
-local function block(future)
-    local results = {}
-    run(future, function(...) results = table.pack(...) end)
-    return table.unpack(results, 1, results.n)
-end
-
 ---@class Queue
 ---@field cb function?
 ---@field q any[]

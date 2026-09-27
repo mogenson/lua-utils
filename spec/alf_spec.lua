@@ -149,7 +149,8 @@ describe("Parser", function()
 
         local parser = Parser()
         ---@type Scope, string?
-        local scope, err = a.block(parser:parse(read))
+        local scope, err
+        a.run(parser:parse(read), function(s, e) scope, err = s, e end)
 
         assert.is_nil(err)
         assert.are.equal("POST", scope.method)
