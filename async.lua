@@ -13,6 +13,7 @@ local function async(fn)
             local poll = nil
             poll = function(...)
                 local result = table.pack(coroutine.resume(thread, ...))
+                if not result[1] then error(result[2]) end
                 if coroutine.status(thread) == "dead" then
                     return cb and cb(table.unpack(result, 2, result.n))
                 else

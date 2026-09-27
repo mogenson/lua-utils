@@ -320,4 +320,37 @@ describe("a", function()
         assert(continueBar)(43)
         assert.are.same({ nil, 43 }, calledWith)
     end)
+
+    it("run propagates errors from async function", function()
+        local err_task = a.sync(function()
+            error("test error in run")
+        end)
+
+        assert.has_error(function()
+            a.run(err_task())
+        end)
+    end)
+
+    it("block propagates errors from async function", function()
+        local err_task = a.sync(function()
+            error("test error in block")
+        end)
+
+        assert.has_error(function()
+            a.block(err_task())
+        end)
+    end)
+
+    it("pcall catches a thrown exception in an async task", function()
+        local err_task = a.sync(function()
+            error("something went wrong")
+        end)
+
+        local ok, err = pcall(function()
+            a.block(err_task())
+        end)
+
+        assert.is_false(ok)
+        assert.is_truthy(string.find(err, "something went wrong"))
+    end)
 end)
