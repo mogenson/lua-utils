@@ -49,50 +49,6 @@ end
 ---@param request Request
 ---@return Response
 local function home(request) ---@diagnostic disable-line:unused-local
-    --[[
-    local html = Html(nil, {
-        Head(nil, {
-            Title(nil, "NextBus"),
-            Meta({ name = "viewport", content = "width=device-width, initial-scale=1", }),
-            Link({
-                rel = "stylesheet",
-                href = "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.min.css",
-            }),
-            Script({ src = "https://cdn.jsdelivr.net/npm/htmx.org@2/dist/htmx.min.js" }),
-        }),
-        Body(nil, {
-            Header(nil, H1(nil, "Arrivals")),
-            Main(nil, {
-                Pre({ id = "arrivals", "hx-get='/arrivals'", "hx-trigger='load'" },
-                    "Loading arrival times..."
-                ),
-                P({ id = "last-update" },
-                    "Waiting for update..."
-                ),
-                Br(),
-                Input({
-                    type = "button",
-                    value = "Refresh",
-                    "hx-get='/arrivals'",
-                    "hx-target='#arrivals'",
-                    "hx-swap='innerHTML'",
-                }),
-                Input({
-                    type = "button",
-                    value = "Close",
-                    "hx-post='/shutdown'",
-                    "hx-on::after-request='window.close()'",
-                }),
-            }),
-            Hr(),
-            Footer(nil, {
-                P(nil, { "LibUV time: ", Ins(nil, function() return loop:now() end) }),
-                P(nil, { "Using ", Mark(nil, function() return collectgarbage("count") end), "Kb" })
-            }),
-        }),
-    })
-    ]] --
-
     local html = Html.Document {
         lang = "en",
 
@@ -106,13 +62,13 @@ local function home(request) ---@diagnostic disable-line:unused-local
                 rel = "stylesheet",
                 href = "https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.fluid.classless.min.css",
             },
-            Html.script { src = "https://cdn.jsdelivr.net/npm/htmx.org@2/dist/htmx.min.js" },
+            Html.script { src = "https://cdn.jsdelivr.net/npm/htmx.org@4/dist/htmx.min.js" },
         },
 
         Html.body {
             Html.header { Html.h1 { "Arrivals" } },
             Html.main {
-                Html.pre { id = "arrivals", hx_get = "/arrivals", hx_trigger = "load", "Loading arrival times..." },
+                Html.pre { id = "arrivals", hx_get = "/arrivals", hx_target = "this", hx_trigger = "load", "Loading arrival times..." },
                 Html.p { id = "last-update", "Waiting for update..." },
                 Html.br(),
                 Html.input {
@@ -126,7 +82,7 @@ local function home(request) ---@diagnostic disable-line:unused-local
                     type = "button",
                     value = "Close",
                     hx_post = "/shutdown",
-                    ["hx-on::after-request"] = "window.close()",
+                    ["hx-on::after:request"] = "window.close()",
                 },
             },
             Html.hr(),
