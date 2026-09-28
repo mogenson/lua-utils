@@ -68,6 +68,7 @@ end
 ---@param host string
 ---@param port number
 ---@return boolean true if there are no active handles on stop
+---@return string? error description on caught exception
 function Server:serve(host, port)
     self.tcp = assert(loop:tcp())
     self.tcp:bind(host, port)
@@ -85,7 +86,9 @@ function Server:serve(host, port)
 
     print(("Listening for requests on http://%s:%d"):format(host, port))
 
-    return loop:run() == 0
+    local ok, result = pcall(loop.run, loop)
+    if not ok then return false, result end
+    return result == 0, nil
 end
 
 return Server

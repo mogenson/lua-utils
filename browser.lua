@@ -27,14 +27,12 @@ local function list_dir(local_path, request_path)
     if request_path ~= "/" then
         local parent_path = request_path:match("(.*)/[^/]+/?$")
         if parent_path == "" then parent_path = "/" end
-        -- table.insert(items, Li(nil, { A({ href = parent_path }, "..") }))
         table.insert(items, Html.li { Html.a { href = parent_path, ".." } })
     end
 
     for _, entry in ipairs(assert(entries)) do
         local link_path = request_path .. (request_path:sub(-1) == "/" and "" or "/") .. entry.name
         local link_name = entry.name .. (entry.type == loop.UV_DIRENT_DIR and "/" or "")
-        -- table.insert(items, Li(nil, { A({ href = link_path }, link_name) }))
         table.insert(items, Html.li { Html.a { href = link_path, link_name } })
     end
 
@@ -107,7 +105,15 @@ local function browser(request)
     end
 end
 
+---Return minimal valid SVG for favicon
+---@return Response
+local function favicon(_)
+    local svg = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+    return Response(svg, "image/svg+xml")
+end
+
 local routes = {
+    Route("/favicon.ico", favicon),
     Route("/(.*)", browser)
 }
 
@@ -119,4 +125,11 @@ local port = 8080
 local command = jit.os == "OSX" and "open" or jit.os == "Linux" and "termux-open-url" or "echo"
 os.execute(("%s http://%s:%d"):format(command, host, port))
 
-os.exit(server:serve(host, port) and 0 or 1)
+while true do
+    local ok, err = server:serve(host, port)
+    if err then
+        print("restarting server due to error: ", err)
+    else
+        os.exit(ok and 0 or 1)
+    end
+end

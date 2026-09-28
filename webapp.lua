@@ -201,8 +201,16 @@ local function shutdown(request) ---@diagnostic disable-line:unused-local
     return response
 end
 
+---Return minimal valid SVG for favicon
+---@return Response
+local function favicon(_)
+    local svg = '<svg xmlns="http://www.w3.org/2000/svg"/>'
+    return Response(svg, "image/svg+xml")
+end
+
 local routes = {
     Route("/", home),
+    Route("/favicon.ico", favicon),
     Route("/arrivals", arrivals),
     Route("/shutdown", shutdown, { "POST" }),
 }
@@ -216,4 +224,11 @@ local command = jit.os == "OSX" and "open" or jit.os == "Linux" and "termux-open
 os.execute(("%s http://%s:%d"):format(command, host, port))
 
 -- run server
-os.exit(server:serve(host, port) and 0 or 1)
+while true do
+    local ok, err = server:serve(host, port)
+    if err then
+        print("restarting server due to error: ", err)
+    else
+        os.exit(ok and 0 or 1)
+    end
+end

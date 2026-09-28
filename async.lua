@@ -212,7 +212,6 @@ return {
     gather = gather,
     select = select,
     run = run,
-    block = block,
 
     queue = queue,
     channel = channel,
