@@ -356,6 +356,7 @@ describe("a", function()
             block(err_task())
         end)
 
+        ---@cast err string
         assert.is_false(ok)
         assert.is_truthy(string.find(err, "something went wrong"))
     end)

@@ -1,5 +1,6 @@
 local ffi = require("ffi")
 local loop = require("libuv")
+local bit = require("bit")
 
 local libcurl = ffi.load("curl")
 ffi.cdef([[
@@ -31,8 +32,10 @@ ffi.cdef([[
     } curl_socket_option;
 
     typedef enum {
+        CURL_POLL_NONE   = 0,
         CURL_POLL_IN     = 1,
         CURL_POLL_OUT    = 2,
+        CURL_POLL_INOUT  = 3,
         CURL_POLL_REMOVE = 4
     } curl_poll_option;
 
@@ -82,6 +85,8 @@ ffi.cdef([[
 ---@field result number
 
 local int = ffi.typeof("int[1]")
+local CURL_CSELECT_IN = libcurl.CURL_CSELECT_IN --[[@as integer]]
+local CURL_CSELECT_OUT = libcurl.CURL_CSELECT_OUT --[[@as integer]]
 libcurl.curl_global_init(libcurl.CURL_GLOBAL_ALL)
 
 local cast = setmetatable({}, {
@@ -127,6 +132,36 @@ local write_callback = cast("write_callback", function(ptr, size, nmemb, handle)
     return len
 end)
 
+--- Checks for completed requests in the curl multi queue and invokes their callbacks
+local function check_multi_info()
+    local done = {} ---@type { cache: cache, result: number }[]
+    local msg = nil
+    repeat
+        msg = libcurl.curl_multi_info_read(curl.multi, int()) ---@type curl_msg?
+        if msg ~= nil and msg.msg == libcurl.CURLMSG_DONE then
+            local handle = msg.handle
+            local result = msg.result
+            local addr = address(handle)
+
+            local cache = assert(curl.handles[addr])
+            curl.handles[addr] = nil
+
+            libcurl.curl_multi_remove_handle(curl.multi, handle)
+            libcurl.curl_easy_cleanup(handle)
+
+            table.insert(done, { cache = cache, result = result })
+        end
+    until msg == nil
+
+    for _, item in ipairs(done) do
+        if item.result ~= 0 then
+            item.cache.callback(nil, ffi.string(libcurl.curl_easy_strerror(item.result)))
+        else
+            item.cache.callback(table.concat(item.cache.data))
+        end
+    end
+end
+
 libcurl.curl_multi_setopt(curl.multi, libcurl.CURLMOPT_SOCKETFUNCTION,
     --- This is the callback function for curl's CURLMOPT_SOCKETFUNCTION option.
     ---@param handle curl
@@ -134,33 +169,18 @@ libcurl.curl_multi_setopt(curl.multi, libcurl.CURLMOPT_SOCKETFUNCTION,
     ---@param action number
     ---@return number
     cast("socket_callback", function(handle, fd, action) ---@diagnostic disable-line:unused-local
-        curl.timer:stop()
-
         --- This function is called by libuv when a socket is ready for reading or writing.
         ---@param events number
         local function perform(events)
-            if events == loop.UV_READABLE then
-                libcurl.curl_multi_socket_action(curl.multi, fd, libcurl.CURL_CSELECT_IN, int())
-            elseif events == loop.UV_WRITABLE then
-                libcurl.curl_multi_socket_action(curl.multi, fd, libcurl.CURL_CSELECT_OUT, int())
+            local flags = 0
+            if bit.band(events, loop.UV_READABLE) ~= 0 then
+                flags = bit.bor(flags, CURL_CSELECT_IN)
             end
-
-            local msg = nil
-            repeat
-                msg = libcurl.curl_multi_info_read(curl.multi, int()) ---@type curl_msg?
-                if msg ~= nil and msg.msg == libcurl.CURLMSG_DONE then
-                    libcurl.curl_multi_remove_handle(curl.multi, msg.handle)
-                    libcurl.curl_easy_cleanup(msg.handle)
-
-                    local cache = assert(curl.handles[address(msg.handle)])
-                    curl.handles[address(msg.handle)] = nil
-                    if msg.result ~= 0 then
-                        cache.callback(nil, ffi.string(libcurl.curl_easy_strerror(msg.result)))
-                    else
-                        cache.callback(table.concat(cache.data))
-                    end
-                end
-            until msg == nil
+            if bit.band(events, loop.UV_WRITABLE) ~= 0 then
+                flags = bit.bor(flags, CURL_CSELECT_OUT)
+            end
+            libcurl.curl_multi_socket_action(curl.multi, fd, flags, int())
+            check_multi_info()
         end
 
         local poll = curl.polls[fd]
@@ -173,6 +193,8 @@ libcurl.curl_multi_setopt(curl.multi, libcurl.CURLMOPT_SOCKETFUNCTION,
             poll:start(loop.UV_READABLE, perform)
         elseif action == libcurl.CURL_POLL_OUT then
             poll:start(loop.UV_WRITABLE, perform)
+        elseif action == libcurl.CURL_POLL_INOUT then
+            poll:start(bit.bor(loop.UV_READABLE, loop.UV_WRITABLE), perform)
         elseif action == libcurl.CURL_POLL_REMOVE then
             poll:stop()
             curl.polls[fd] = nil
@@ -184,6 +206,7 @@ libcurl.curl_multi_setopt(curl.multi, libcurl.CURLMOPT_SOCKETFUNCTION,
 --- This function is called by libuv when the timer expires.
 local function timeout()
     libcurl.curl_multi_socket_action(curl.multi, libcurl.CURL_SOCKET_TIMEOUT, 0, int())
+    check_multi_info()
 end
 
 libcurl.curl_multi_setopt(curl.multi, libcurl.CURLMOPT_TIMERFUNCTION, cast("timer_callback",

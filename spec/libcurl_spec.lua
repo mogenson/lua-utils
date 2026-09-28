@@ -11,30 +11,33 @@ describe("libcurl", function()
             curl.GET(url, cb)
         end)
 
-        local get1 = a.sync(function(url)
-            return a.wait(fetch(url))
-        end)
-
-        local get2 = a.sync(function(url)
+        local get = a.sync(function(url)
             return a.wait(fetch(url))
         end)
 
         local main = a.sync(function()
-            return a.wait(a.gather({ get1(url), get2(url) }))
+            return a.wait(a.gather({
+                get(url),
+                get(url),
+                get(url),
+                get(url),
+                get(url),
+                get(url),
+            }))
         end)
 
-        local response1, response2 ---@type string?, string?
+        local responses ---@type string[]
         a.run(main(), function(...)
-            response1, response2 = ... ---@type string?, string?
+            responses = { ... }
         end)
         loop:run()
 
         local expected = string.format('"url": "%s"\n}\n', url)
-        assert.are.same("string", type(response1))
-        assert.are.same(expected, assert(response1):sub(- #expected))
-
-        assert.are.same("string", type(response2))
-        assert.are.same(expected, assert(response2):sub(- #expected))
+        assert.are.same(6, #responses)
+        for _, resp in ipairs(responses) do
+            assert.are.same("string", type(resp))
+            assert.are.same(expected, assert(resp):sub(- #expected))
+        end
     end)
 
     it("post", function()
