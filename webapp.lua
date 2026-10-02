@@ -184,6 +184,7 @@ while true do
     local ok, err = server:serve(host, port)
     if err then
         print("restarting server due to error: ", err)
+        loop:shutdown();
     else
         os.exit(ok and 0 or 1)
     end
